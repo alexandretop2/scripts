@@ -384,6 +384,8 @@ mobileToggle.AutoButtonColor = true
 mobileToggle.Parent = screenGui
 Instance.new("UICorner", mobileToggle).CornerRadius = UDim.new(0, 10)
 
+makeDraggable(mobileToggle)   -- ← adiciona essa linha
+
 -- ─────────────────────────────────────────────
 -- VEHICLE HELPERS
 -- ─────────────────────────────────────────────
