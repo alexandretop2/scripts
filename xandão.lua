@@ -1,5 +1,4 @@
 local UserInputService = game:GetService("UserInputService")
-local ContextActionService = game:GetService("ContextActionService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -21,17 +20,55 @@ local menuKey = Enum.KeyCode.J
 local isMenuOpen = true
 local isBindingKey = false
 
--- Parâmetros do Veículo
 local BOOST_FORCE = 25000
-local JUMP_FORCE = 8000 -- Começa baixo conforme solicitado (ex: 8000)
+local JUMP_FORCE = 8000
 
 local isShiftPressed = false
 local boostConnection = nil
 local activeVectorForce = nil
 local activeAttachment = nil
 
--- Detecta se é dispositivo móvel (Touch)
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- Função de Arrastar (Drag) Universal (PC e Mobile)
+local function makeDraggable(guiObject)
+	local dragging = false
+	local dragInput, dragStart, startPos
+
+	local function update(input)
+		local delta = input.Position - dragStart
+		guiObject.Position = UDim2.new(
+			startPos.X.Scale, startPos.X.Offset + delta.X,
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y
+		)
+	end
+
+	guiObject.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = guiObject.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	guiObject.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
+		end
+	end)
+end
 
 -- ==============================================================================
 -- 2. CRIAÇÃO DA INTERFACE VISUAL (GUI)
@@ -42,12 +79,12 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
 --------------------------------------------------------------------------------
--- A. TELA DE CARREGAMENTO (LOADING SCREEN)
+-- A. TELA DE CARREGAMENTO (2 SEGUNDOS EXATOS)
 --------------------------------------------------------------------------------
 local loadingFrame = Instance.new("Frame")
 loadingFrame.Name = "LoadingFrame"
-loadingFrame.Size = UDim2.new(0, 300, 0, 150)
-loadingFrame.Position = UDim2.new(0.5, -150, 0.5, -75)
+loadingFrame.Size = UDim2.new(0, 280, 0, 130)
+loadingFrame.Position = UDim2.new(0.5, -140, 0.5, -65)
 loadingFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
 loadingFrame.BorderSizePixel = 0
 loadingFrame.Parent = screenGui
@@ -57,24 +94,24 @@ loadCorner.CornerRadius = UDim.new(0, 10)
 loadCorner.Parent = loadingFrame
 
 local loadTitle = Instance.new("TextLabel")
-loadTitle.Size = UDim2.new(1, 0, 0, 40)
-loadTitle.Position = UDim2.new(0, 0, 0, 20)
+loadTitle.Size = UDim2.new(1, 0, 0, 35)
+loadTitle.Position = UDim2.new(0, 0, 0, 15)
 loadTitle.Text = "🚀 CARREGANDO PAINEL..."
 loadTitle.TextColor3 = Color3.fromRGB(240, 240, 250)
 loadTitle.Font = Enum.Font.GothamBold
-loadTitle.TextSize = 14
+loadTitle.TextSize = 13
 loadTitle.BackgroundTransparency = 1
 loadTitle.Parent = loadingFrame
 
 local barBg = Instance.new("Frame")
-barBg.Size = UDim2.new(0, 240, 0, 10)
-barBg.Position = UDim2.new(0.5, -120, 0, 80)
+barBg.Size = UDim2.new(0, 220, 0, 8)
+barBg.Position = UDim2.new(0.5, -110, 0, 70)
 barBg.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
 barBg.BorderSizePixel = 0
 barBg.Parent = loadingFrame
 
 local barBgCorner = Instance.new("UICorner")
-barBgCorner.CornerRadius = UDim.new(0, 5)
+barBgCorner.CornerRadius = UDim.new(0, 4)
 barBgCorner.Parent = barBg
 
 local barFill = Instance.new("Frame")
@@ -84,26 +121,27 @@ barFill.BorderSizePixel = 0
 barFill.Parent = barBg
 
 local barFillCorner = Instance.new("UICorner")
-barFillCorner.CornerRadius = UDim.new(0, 5)
+barFillCorner.CornerRadius = UDim.new(0, 4)
 barFillCorner.Parent = barFill
 
 --------------------------------------------------------------------------------
--- B. PAINEL PRINCIPAL
+-- B. PAINEL PRINCIPAL (ARRASTÁVEL)
 --------------------------------------------------------------------------------
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 420, 0, 310)
-mainFrame.Position = UDim2.new(0.5, -210, 0.5, -155)
+mainFrame.Size = UDim2.new(0, 400, 0, 290)
+mainFrame.Position = UDim2.new(0.5, -200, 0.5, -145)
 mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 mainFrame.BorderSizePixel = 0
 mainFrame.Visible = false
-mainFrame.Active = true
-mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 
 local mainCorner = Instance.new("UICorner")
 mainCorner.CornerRadius = UDim.new(0, 12)
 mainCorner.Parent = mainFrame
+
+-- Torna o painel principal arrastável
+makeDraggable(mainFrame)
 
 -- Barra Superior (Header)
 local header = Instance.new("Frame")
@@ -122,12 +160,11 @@ titleLabel.Position = UDim2.new(0, 15, 0, 0)
 titleLabel.Text = "⚡ CONTROL HUB"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextSize = 14
+titleLabel.TextSize = 13
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.BackgroundTransparency = 1
 titleLabel.Parent = header
 
--- Botão de Fechar no Header
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 30, 0, 30)
 closeBtn.Position = UDim2.new(1, -35, 0, 5)
@@ -138,7 +175,7 @@ closeBtn.TextSize = 14
 closeBtn.BackgroundTransparency = 1
 closeBtn.Parent = header
 
--- Container de Abas (Tabs Bar)
+-- Abas
 local tabBar = Instance.new("Frame")
 tabBar.Size = UDim2.new(1, -20, 0, 35)
 tabBar.Position = UDim2.new(0, 10, 0, 48)
@@ -147,7 +184,7 @@ tabBar.Parent = mainFrame
 
 local function createTabButton(name, xPos)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 120, 1, 0)
+	btn.Size = UDim2.new(0, 110, 1, 0)
 	btn.Position = UDim2.new(0, xPos, 0, 0)
 	btn.Text = name
 	btn.TextColor3 = Color3.fromRGB(200, 200, 210)
@@ -165,9 +202,8 @@ local function createTabButton(name, xPos)
 end
 
 local tabBtnVehicle = createTabButton("🚗 Veículo", 0)
-local tabBtnSettings = createTabButton("⚙️ Configurações", 130)
+local tabBtnSettings = createTabButton("⚙️ Ajustes", 120)
 
--- Container das Páginas
 local pagesFolder = Instance.new("Folder")
 pagesFolder.Name = "Pages"
 pagesFolder.Parent = mainFrame
@@ -175,7 +211,7 @@ pagesFolder.Parent = mainFrame
 local function createPage(name)
 	local page = Instance.new("Frame")
 	page.Name = name
-	page.Size = UDim2.new(1, -20, 0, 210)
+	page.Size = UDim2.new(1, -20, 0, 190)
 	page.Position = UDim2.new(0, 10, 0, 90)
 	page.BackgroundTransparency = 1
 	page.Visible = false
@@ -186,17 +222,16 @@ end
 local pageVehicle = createPage("VehiclePage")
 local pageSettings = createPage("SettingsPage")
 
--- Exibe a primeira aba por padrão
 pageVehicle.Visible = true
 tabBtnVehicle.BackgroundColor3 = Color3.fromRGB(0, 140, 230)
 tabBtnVehicle.TextColor3 = Color3.fromRGB(255, 255, 255)
 
 --------------------------------------------------------------------------------
--- C. COMPONENTES DA ABA "VEÍCULO"
+-- C. CONTEÚDO DA ABA VEÍCULO
 --------------------------------------------------------------------------------
 local function createInputRow(parent, labelText, defaultValue, yPos)
 	local container = Instance.new("Frame")
-	container.Size = UDim2.new(1, 0, 0, 45)
+	container.Size = UDim2.new(1, 0, 0, 40)
 	container.Position = UDim2.new(0, 0, 0, yPos)
 	container.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
 	container.BorderSizePixel = 0
@@ -207,7 +242,7 @@ local function createInputRow(parent, labelText, defaultValue, yPos)
 	cCorner.Parent = container
 
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(0, 220, 1, 0)
+	label.Size = UDim2.new(0, 200, 1, 0)
 	label.Position = UDim2.new(0, 12, 0, 0)
 	label.Text = labelText
 	label.TextColor3 = Color3.fromRGB(220, 220, 230)
@@ -218,8 +253,8 @@ local function createInputRow(parent, labelText, defaultValue, yPos)
 	label.Parent = container
 
 	local box = Instance.new("TextBox")
-	box.Size = UDim2.new(0, 120, 0, 28)
-	box.Position = UDim2.new(1, -130, 0.5, -14)
+	box.Size = UDim2.new(0, 110, 0, 26)
+	box.Position = UDim2.new(1, -120, 0.5, -13)
 	box.Text = tostring(defaultValue)
 	box.TextColor3 = Color3.fromRGB(255, 255, 255)
 	box.BackgroundColor3 = Color3.fromRGB(42, 42, 54)
@@ -235,13 +270,12 @@ local function createInputRow(parent, labelText, defaultValue, yPos)
 	return box
 end
 
-local jumpBox = createInputRow(pageVehicle, "Poder do Pulo (Jump Power):", JUMP_FORCE, 0)
-local nitroBox = createInputRow(pageVehicle, "Força do Nitro (Boost):", BOOST_FORCE, 55)
+local jumpBox = createInputRow(pageVehicle, "Poder do Pulo:", JUMP_FORCE, 0)
+local nitroBox = createInputRow(pageVehicle, "Força do Nitro:", BOOST_FORCE, 48)
 
--- Botão Manual de Pular no Painel
 local jumpActionBtn = Instance.new("TextButton")
-jumpActionBtn.Size = UDim2.new(1, 0, 0, 42)
-jumpActionBtn.Position = UDim2.new(0, 0, 0, 110)
+jumpActionBtn.Size = UDim2.new(1, 0, 0, 38)
+jumpActionBtn.Position = UDim2.new(0, 0, 0, 98)
 jumpActionBtn.Text = "🦘 PULAR AGORA"
 jumpActionBtn.BackgroundColor3 = Color3.fromRGB(0, 160, 220)
 jumpActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -255,10 +289,10 @@ jBtnCorner.CornerRadius = UDim.new(0, 6)
 jBtnCorner.Parent = jumpActionBtn
 
 --------------------------------------------------------------------------------
--- D. COMPONENTES DA ABA "CONFIGURAÇÕES" (KEYBIND)
+-- D. CONTEÚDO DA ABA CONFIGURAÇÕES
 --------------------------------------------------------------------------------
 local keybindContainer = Instance.new("Frame")
-keybindContainer.Size = UDim2.new(1, 0, 0, 50)
+keybindContainer.Size = UDim2.new(1, 0, 0, 45)
 keybindContainer.Position = UDim2.new(0, 0, 0, 0)
 keybindContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
 keybindContainer.BorderSizePixel = 0
@@ -271,7 +305,7 @@ kbCorner.Parent = keybindContainer
 local kbLabel = Instance.new("TextLabel")
 kbLabel.Size = UDim2.new(0, 200, 1, 0)
 kbLabel.Position = UDim2.new(0, 12, 0, 0)
-kbLabel.Text = "Tecla Abrir/Fechar Painel:"
+kbLabel.Text = "Tecla Menu (PC):"
 kbLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
 kbLabel.Font = Enum.Font.Gotham
 kbLabel.TextSize = 12
@@ -280,8 +314,8 @@ kbLabel.BackgroundTransparency = 1
 kbLabel.Parent = keybindContainer
 
 local keybindBtn = Instance.new("TextButton")
-keybindBtn.Size = UDim2.new(0, 120, 0, 30)
-keybindBtn.Position = UDim2.new(1, -130, 0.5, -15)
+keybindBtn.Size = UDim2.new(0, 110, 0, 28)
+keybindBtn.Position = UDim2.new(1, -120, 0.5, -14)
 keybindBtn.Text = menuKey.Name
 keybindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 keybindBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
@@ -295,21 +329,21 @@ kbcCorner.CornerRadius = UDim.new(0, 4)
 kbcCorner.Parent = keybindBtn
 
 --------------------------------------------------------------------------------
--- E. BOTÕES FLUTUANTES PARA MOBILE
+-- E. BOTÕES MOBILE
 --------------------------------------------------------------------------------
 local mobileFrame = Instance.new("Frame")
 mobileFrame.Name = "MobileControls"
 mobileFrame.Size = UDim2.new(0, 130, 0, 60)
-mobileFrame.Position = UDim2.new(0.82, 0, 0.65, 0)
+mobileFrame.Position = UDim2.new(0.8, 0, 0.65, 0)
 mobileFrame.BackgroundTransparency = 1
-mobileFrame.Visible = isMobile -- Ativa automaticamente em telas touch
+mobileFrame.Visible = isMobile
 mobileFrame.Parent = screenGui
 
 local mobileJumpBtn = Instance.new("TextButton")
-mobileJumpBtn.Size = UDim2.new(0, 55, 0, 55)
+mobileJumpBtn.Size = UDim2.new(0, 52, 0, 52)
 mobileJumpBtn.Position = UDim2.new(0, 0, 0, 0)
 mobileJumpBtn.Text = "🦘"
-mobileJumpBtn.TextSize = 22
+mobileJumpBtn.TextSize = 20
 mobileJumpBtn.BackgroundColor3 = Color3.fromRGB(0, 160, 230)
 mobileJumpBtn.Parent = mobileFrame
 
@@ -318,10 +352,10 @@ mjCorner.CornerRadius = UDim.new(1, 0)
 mjCorner.Parent = mobileJumpBtn
 
 local mobileNitroBtn = Instance.new("TextButton")
-mobileNitroBtn.Size = UDim2.new(0, 55, 0, 55)
-mobileNitroBtn.Position = UDim2.new(0, 65, 0, 0)
+mobileNitroBtn.Size = UDim2.new(0, 52, 0, 52)
+mobileNitroBtn.Position = UDim2.new(0, 60, 0, 0)
 mobileNitroBtn.Text = "⚡"
-mobileNitroBtn.TextSize = 22
+mobileNitroBtn.TextSize = 20
 mobileNitroBtn.BackgroundColor3 = Color3.fromRGB(230, 120, 0)
 mobileNitroBtn.Parent = mobileFrame
 
@@ -329,12 +363,11 @@ local mnCorner = Instance.new("UICorner")
 mnCorner.CornerRadius = UDim.new(1, 0)
 mnCorner.Parent = mobileNitroBtn
 
--- Botão no Canto para Abrir/Fechar Painel no Mobile
 local mobileToggleMenu = Instance.new("TextButton")
-mobileToggleMenu.Size = UDim2.new(0, 40, 0, 40)
+mobileToggleMenu.Size = UDim2.new(0, 38, 0, 38)
 mobileToggleMenu.Position = UDim2.new(0.02, 0, 0.2, 0)
 mobileToggleMenu.Text = "⚙️"
-mobileToggleMenu.TextSize = 18
+mobileToggleMenu.TextSize = 16
 mobileToggleMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 mobileToggleMenu.Visible = isMobile
 mobileToggleMenu.Parent = screenGui
@@ -344,7 +377,7 @@ mtCorner.CornerRadius = UDim.new(0, 8)
 mtCorner.Parent = mobileToggleMenu
 
 -- ==============================================================================
--- 3. LÓGICA DE FUNCIONAMENTO DO VEÍCULO (NITRO E PULO)
+-- 3. LÓGICA DO VEÍCULO
 -- ==============================================================================
 local function stopBoost()
 	if boostConnection then boostConnection:Disconnect() boostConnection = nil end
@@ -366,7 +399,6 @@ local function startBoost()
 	local seat = humanoid.SeatPart
 	local carAssembly = seat.AssemblyRootPart or seat
 
-	-- Varredura de segurança
 	for _, child in ipairs(carAssembly:GetChildren()) do
 		if child.Name == "BoostForce" or child.Name == "BoostAttachment" then
 			child:Destroy()
@@ -407,15 +439,12 @@ local function applyJump()
 	local seat = humanoid.SeatPart
 	local carAssembly = seat.AssemblyRootPart or seat
 
-	-- Aplica a força de pulo proporcional ao peso do carro
 	carAssembly:ApplyImpulse(Vector3.new(0, JUMP_FORCE, 0) * carAssembly:GetMass())
 end
 
 -- ==============================================================================
--- 4. CONEXÕES DA GUI E INPUTS
+-- 4. CONEXÕES
 -- ==============================================================================
-
--- Atualização das Caixas de Texto
 jumpBox.FocusLost:Connect(function()
 	JUMP_FORCE = tonumber(jumpBox.Text) or JUMP_FORCE
 	jumpBox.Text = tostring(JUMP_FORCE)
@@ -426,7 +455,6 @@ nitroBox.FocusLost:Connect(function()
 	nitroBox.Text = tostring(BOOST_FORCE)
 end)
 
--- Troca de Abas
 tabBtnVehicle.MouseButton1Click:Connect(function()
 	pageVehicle.Visible = true
 	pageSettings.Visible = false
@@ -445,7 +473,6 @@ tabBtnSettings.MouseButton1Click:Connect(function()
 	tabBtnVehicle.TextColor3 = Color3.fromRGB(200, 200, 210)
 end)
 
--- Botões de Ação Visual
 jumpActionBtn.MouseButton1Click:Connect(applyJump)
 mobileJumpBtn.MouseButton1Click:Connect(applyJump)
 
@@ -469,14 +496,12 @@ mobileToggleMenu.MouseButton1Click:Connect(function()
 	mainFrame.Visible = isMenuOpen
 end)
 
--- Sistema de Rebind de Tecla
 keybindBtn.MouseButton1Click:Connect(function()
 	isBindingKey = true
 	keybindBtn.Text = "Pressione..."
 	keybindBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 0)
 end)
 
--- Listener de Teclado
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if isBindingKey then
 		if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -490,13 +515,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
 	if gameProcessed then return end
 
-	-- Abrir/Fechar com a tecla configurada
 	if input.KeyCode == menuKey then
 		isMenuOpen = not isMenuOpen
 		mainFrame.Visible = isMenuOpen
 	end
 
-	-- Nitro no Shift
 	if input.KeyCode == Enum.KeyCode.LeftShift then
 		isShiftPressed = true
 		startBoost()
@@ -511,13 +534,13 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
 end)
 
 -- ==============================================================================
--- 5. SIMULAÇÃO DA TELA DE CARREGAMENTO (ANIMADA)
+-- 5. ANIMAÇÃO DE CARREGAMENTO (EXATAMENTE 2 SEGUNDOS)
 -- ==============================================================================
-task.spawn(function()
-	TweenService:Create(barFill, TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size = UDim2.new(1, 0, 1, 0)
-	}):Play()
-	task.wait(1.3)
+local tweenInfo = TweenInfo.new(2.0, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+local barTween = TweenService:Create(barFill, tweenInfo, {Size = UDim2.new(1, 0, 1, 0)})
+
+barTween:Play()
+barTween.Completed:Connect(function()
 	loadingFrame:Destroy()
 	mainFrame.Visible = true
 end)
