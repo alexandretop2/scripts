@@ -79,7 +79,7 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
 --------------------------------------------------------------------------------
--- A. TELA DE CARREGAMENTO (2 SEGUNDOS EXATOS)
+-- A. TELA DE CARREGAMENTO (2 SEGUNDOS)
 --------------------------------------------------------------------------------
 local loadingFrame = Instance.new("Frame")
 loadingFrame.Name = "LoadingFrame"
@@ -443,7 +443,7 @@ local function applyJump()
 end
 
 -- ==============================================================================
--- 4. CONEXÕES
+-- 4. CONEXÕES DE INTERFACE E ENTRADA
 -- ==============================================================================
 jumpBox.FocusLost:Connect(function()
 	JUMP_FORCE = tonumber(jumpBox.Text) or JUMP_FORCE
@@ -534,13 +534,18 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
 end)
 
 -- ==============================================================================
--- 5. ANIMAÇÃO DE CARREGAMENTO (EXATAMENTE 2 SEGUNDOS)
+-- 5. LÓGICA DE CARREGAMENTO (INFALÍVEL VIA TASK.SPAWN)
 -- ==============================================================================
-local tweenInfo = TweenInfo.new(2.0, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-local barTween = TweenService:Create(barFill, tweenInfo, {Size = UDim2.new(1, 0, 1, 0)})
-
-barTween:Play()
-barTween.Completed:Connect(function()
-	loadingFrame:Destroy()
+task.spawn(function()
+	-- Anima a barra visualmente
+	TweenService:Create(barFill, TweenInfo.new(2.0, Enum.EasingStyle.Linear), {Size = UDim2.new(1, 0, 1, 0)}):Play()
+	
+	-- Aguarda 2 segundos cravados
+	task.wait(2.0)
+	
+	-- Força a destruição do carregamento e abre o menu
+	if loadingFrame and loadingFrame.Parent then
+		loadingFrame:Destroy()
+	end
 	mainFrame.Visible = true
 end)
