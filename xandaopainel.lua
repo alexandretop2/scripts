@@ -1,6 +1,6 @@
 --[[
     ⚡ CONTROL HUB
-    Nitro e Pulo separados + botões arrastáveis + keybinds
+    Nitro | Pulo | Pneu | Ajustes
 ]]
 
 local UserInputService = game:GetService("UserInputService")
@@ -10,17 +10,11 @@ local Players          = game:GetService("Players")
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ─────────────────────────────────────────────
--- CLEANUP
--- ─────────────────────────────────────────────
 pcall(function()
     local old = playerGui:FindFirstChild("CustomControlHub")
     if old then old:Destroy() end
 end)
 
--- ─────────────────────────────────────────────
--- CONFIG
--- ─────────────────────────────────────────────
 local menuKey      = Enum.KeyCode.J
 local nitroKey     = Enum.KeyCode.LeftShift
 local jumpKey      = Enum.KeyCode.Space
@@ -40,16 +34,60 @@ local activeAtt    = nil
 local nitroBtnExists = false
 local jumpBtnExists  = false
 
--- ─────────────────────────────────────────────
--- DRAG HELPER
--- ─────────────────────────────────────────────
+local MATERIALS = {
+    Enum.Material.Plastic,
+    Enum.Material.SmoothPlastic,
+    Enum.Material.Neon,
+    Enum.Material.ForceField,
+    Enum.Material.Glass,
+    Enum.Material.Metal,
+    Enum.Material.DiamondPlate,
+    Enum.Material.CorrodedMetal,
+    Enum.Material.Foil,
+    Enum.Material.Wood,
+    Enum.Material.WoodPlanks,
+    Enum.Material.Marble,
+    Enum.Material.Slate,
+    Enum.Material.Concrete,
+    Enum.Material.Granite,
+    Enum.Material.Brick,
+    Enum.Material.Pebble,
+    Enum.Material.Cobblestone,
+    Enum.Material.Rock,
+    Enum.Material.Sandstone,
+    Enum.Material.Basalt,
+    Enum.Material.CrackedLava,
+    Enum.Material.Limestone,
+    Enum.Material.Pavement,
+    Enum.Material.Grass,
+    Enum.Material.LeafyGrass,
+    Enum.Material.Sand,
+    Enum.Material.Fabric,
+    Enum.Material.Ice,
+    Enum.Material.Glacier,
+    Enum.Material.Snow,
+    Enum.Material.Mud,
+    Enum.Material.Ground,
+    Enum.Material.Asphalt,
+    Enum.Material.Salt,
+    Enum.Material.Cardboard,
+    Enum.Material.Carpet,
+    Enum.Material.CeramicTiles,
+    Enum.Material.ClayRoofTiles,
+    Enum.Material.Plaster,
+    Enum.Material.Rubber,
+    Enum.Material.RoofShingles,
+}
+local materialIndex = 1
+
 local function makeDraggable(guiObject)
-    local dragging, dragStart, startPos
+    local dragging, dragStart, startPos, moved
 
     guiObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
             dragging  = true
+            moved     = false
             dragStart = input.Position
             startPos  = guiObject.Position
             local conn
@@ -66,17 +104,17 @@ local function makeDraggable(guiObject)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
                       or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
-            guiObject.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
+            if math.abs(delta.X) > 4 or math.abs(delta.Y) > 4 then
+                moved = true
+                guiObject.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
+            end
         end
     end)
 end
 
--- ─────────────────────────────────────────────
--- SCREEN GUI
--- ─────────────────────────────────────────────
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name           = "CustomControlHub"
 screenGui.ResetOnSpawn   = false
@@ -84,13 +122,10 @@ screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.IgnoreGuiInset = true
 screenGui.Parent         = playerGui
 
--- ─────────────────────────────────────────────
--- MAIN PANEL
--- ─────────────────────────────────────────────
 local mainFrame = Instance.new("Frame")
 mainFrame.Name             = "MainFrame"
-mainFrame.Size             = UDim2.new(0, 400, 0, 340)
-mainFrame.Position         = UDim2.new(0.5, -200, 0.5, -170)
+mainFrame.Size             = UDim2.new(0, 420, 0, 360)
+mainFrame.Position         = UDim2.new(0.5, -210, 0.5, -180)
 mainFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
 mainFrame.BorderSizePixel  = 0
 mainFrame.Visible          = true
@@ -105,7 +140,6 @@ mainStroke.Parent = mainFrame
 
 makeDraggable(mainFrame)
 
--- Header
 local header = Instance.new("Frame")
 header.Size = UDim2.new(1, 0, 0, 42)
 header.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
@@ -141,10 +175,9 @@ closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 15
 closeBtn.Parent = header
 
--- Tabs
 local tabBar = Instance.new("Frame")
-tabBar.Size = UDim2.new(1, -20, 0, 34)
-tabBar.Position = UDim2.new(0, 10, 0, 50)
+tabBar.Size = UDim2.new(1, -16, 0, 34)
+tabBar.Position = UDim2.new(0, 8, 0, 50)
 tabBar.BackgroundTransparency = 1
 tabBar.Parent = mainFrame
 
@@ -157,29 +190,28 @@ local function createTab(text, x, w)
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(170, 170, 185)
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
+    btn.TextSize = 11
     btn.AutoButtonColor = false
     btn.Parent = tabBar
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     return btn
 end
 
-local tabNitro    = createTab("⚡ Nitro", 0, 100)
-local tabJump     = createTab("🦘 Pulo", 110, 100)
-local tabSettings = createTab("⚙️ Ajustes", 220, 100)
+local tabNitro    = createTab("⚡ Nitro", 0, 95)
+local tabJump     = createTab("🦘 Pulo", 100, 95)
+local tabPneu     = createTab("🛞 Pneu", 200, 95)
+local tabSettings = createTab("⚙️ Ajustes", 300, 100)
 
 local function setActiveTab(active, ...)
-    local others = {...}
     active.BackgroundColor3 = Color3.fromRGB(0, 140, 230)
     active.TextColor3 = Color3.fromRGB(255, 255, 255)
-    for _, t in ipairs(others) do
+    for _, t in ipairs({...}) do
         t.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
         t.TextColor3 = Color3.fromRGB(170, 170, 185)
     end
 end
-setActiveTab(tabNitro, tabJump, tabSettings)
+setActiveTab(tabNitro, tabJump, tabPneu, tabSettings)
 
--- Pages
 local pages = Instance.new("Folder")
 pages.Name = "Pages"
 pages.Parent = mainFrame
@@ -187,7 +219,7 @@ pages.Parent = mainFrame
 local function createPage(name)
     local p = Instance.new("Frame")
     p.Name = name
-    p.Size = UDim2.new(1, -20, 0, 230)
+    p.Size = UDim2.new(1, -20, 0, 250)
     p.Position = UDim2.new(0, 10, 0, 95)
     p.BackgroundTransparency = 1
     p.Visible = false
@@ -197,12 +229,10 @@ end
 
 local pageNitro    = createPage("NitroPage")
 local pageJump     = createPage("JumpPage")
+local pagePneu     = createPage("PneuPage")
 local pageSettings = createPage("SettingsPage")
 pageNitro.Visible = true
 
--- ─────────────────────────────────────────────
--- HELPERS UI
--- ─────────────────────────────────────────────
 local function createSection(parent, title, y)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, 0, 0, 28)
@@ -284,13 +314,9 @@ local function createActionBtn(parent, text, y, color)
     return btn
 end
 
--- ─────────────────────────────────────────────
--- NITRO PAGE
--- ─────────────────────────────────────────────
+-- NITRO
 createSection(pageNitro, "⚡  NITRO", 0)
-
 local nitroBox, nitroValLabel = createPowerRow(pageNitro, "Força do Nitro (100 - 1M)", BOOST_FORCE, 30)
-
 local createNitroBtn = createActionBtn(pageNitro, "📌  Criar Botão de Nitro (arrastável)", 90, Color3.fromRGB(230, 120, 0))
 local bindNitroBtn   = createActionBtn(pageNitro, "⌨️  Definir Tecla do Nitro  [" .. nitroKey.Name .. "]", 135, Color3.fromRGB(50, 50, 70))
 
@@ -304,13 +330,9 @@ nitroStatus.Font = Enum.Font.Gotham
 nitroStatus.TextSize = 11
 nitroStatus.Parent = pageNitro
 
--- ─────────────────────────────────────────────
--- JUMP PAGE
--- ─────────────────────────────────────────────
+-- JUMP
 createSection(pageJump, "🦘  PULO", 0)
-
 local jumpBox, jumpValLabel = createPowerRow(pageJump, "Poder do Pulo (0 - 5000)", JUMP_FORCE, 30)
-
 local createJumpBtn = createActionBtn(pageJump, "📌  Criar Botão de Pulo (arrastável)", 90, Color3.fromRGB(0, 150, 220))
 local bindJumpBtn   = createActionBtn(pageJump, "⌨️  Definir Tecla do Pulo  [" .. jumpKey.Name .. "]", 135, Color3.fromRGB(50, 50, 70))
 
@@ -324,9 +346,78 @@ jumpStatus.Font = Enum.Font.Gotham
 jumpStatus.TextSize = 11
 jumpStatus.Parent = pageJump
 
--- ─────────────────────────────────────────────
--- SETTINGS PAGE
--- ─────────────────────────────────────────────
+-- PNEU
+createSection(pagePneu, "🛞  MATERIAL DO PNEU", 0)
+
+local selectorRow = Instance.new("Frame")
+selectorRow.Size = UDim2.new(1, 0, 0, 50)
+selectorRow.Position = UDim2.new(0, 0, 0, 40)
+selectorRow.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+selectorRow.BorderSizePixel = 0
+selectorRow.Parent = pagePneu
+Instance.new("UICorner", selectorRow).CornerRadius = UDim.new(0, 10)
+
+local leftArrow = Instance.new("TextButton")
+leftArrow.Size = UDim2.new(0, 44, 0, 36)
+leftArrow.Position = UDim2.new(0, 8, 0.5, -18)
+leftArrow.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+leftArrow.BorderSizePixel = 0
+leftArrow.Text = "◀"
+leftArrow.TextColor3 = Color3.fromRGB(255, 255, 255)
+leftArrow.Font = Enum.Font.GothamBold
+leftArrow.TextSize = 16
+leftArrow.AutoButtonColor = true
+leftArrow.Parent = selectorRow
+Instance.new("UICorner", leftArrow).CornerRadius = UDim.new(0, 8)
+
+local rightArrow = Instance.new("TextButton")
+rightArrow.Size = UDim2.new(0, 44, 0, 36)
+rightArrow.Position = UDim2.new(1, -52, 0.5, -18)
+rightArrow.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+rightArrow.BorderSizePixel = 0
+rightArrow.Text = "▶"
+rightArrow.TextColor3 = Color3.fromRGB(255, 255, 255)
+rightArrow.Font = Enum.Font.GothamBold
+rightArrow.TextSize = 16
+rightArrow.AutoButtonColor = true
+rightArrow.Parent = selectorRow
+Instance.new("UICorner", rightArrow).CornerRadius = UDim.new(0, 8)
+
+local materialLabel = Instance.new("TextLabel")
+materialLabel.Size = UDim2.new(1, -120, 1, 0)
+materialLabel.Position = UDim2.new(0, 60, 0, 0)
+materialLabel.BackgroundTransparency = 1
+materialLabel.Text = MATERIALS[materialIndex].Name
+materialLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+materialLabel.Font = Enum.Font.GothamBold
+materialLabel.TextSize = 15
+materialLabel.Parent = selectorRow
+
+local applyBtn = createActionBtn(pagePneu, "✅  Aplicar Material nas Rodas", 105, Color3.fromRGB(0, 160, 100))
+
+local pneuStatus = Instance.new("TextLabel")
+pneuStatus.Size = UDim2.new(1, 0, 0, 40)
+pneuStatus.Position = UDim2.new(0, 0, 0, 155)
+pneuStatus.BackgroundTransparency = 1
+pneuStatus.Text = "Procura: FR / FL / RR / RL → Wheel\nEntre no veículo e clique Aplicar."
+pneuStatus.TextColor3 = Color3.fromRGB(130, 130, 150)
+pneuStatus.Font = Enum.Font.Gotham
+pneuStatus.TextSize = 11
+pneuStatus.TextXAlignment = Enum.TextXAlignment.Left
+pneuStatus.TextYAlignment = Enum.TextYAlignment.Top
+pneuStatus.Parent = pagePneu
+
+local pneuInfo = Instance.new("TextLabel")
+pneuInfo.Size = UDim2.new(1, 0, 0, 30)
+pneuInfo.Position = UDim2.new(0, 0, 0, 210)
+pneuInfo.BackgroundTransparency = 1
+pneuInfo.Text = "Total de materiais: " .. #MATERIALS
+pneuInfo.TextColor3 = Color3.fromRGB(100, 100, 120)
+pneuInfo.Font = Enum.Font.Gotham
+pneuInfo.TextSize = 11
+pneuInfo.Parent = pagePneu
+
+-- SETTINGS
 local keybindRow = Instance.new("Frame")
 keybindRow.Size = UDim2.new(1, 0, 0, 50)
 keybindRow.Position = UDim2.new(0, 0, 0, 0)
@@ -359,10 +450,10 @@ menuKeyBtn.Parent = keybindRow
 Instance.new("UICorner", menuKeyBtn).CornerRadius = UDim.new(0, 6)
 
 local infoLabel = Instance.new("TextLabel")
-infoLabel.Size = UDim2.new(1, 0, 0, 120)
+infoLabel.Size = UDim2.new(1, 0, 0, 140)
 infoLabel.Position = UDim2.new(0, 0, 0, 65)
 infoLabel.BackgroundTransparency = 1
-infoLabel.Text = "• Nitro e Pulo funcionam apenas\n  quando você estiver sentado no veículo.\n\n• Crie botões arrastáveis e posicione\n  onde quiser na tela.\n\n• Defina teclas personalizadas para\n  Nitro e Pulo.\n\n• Tecla padrão do menu: J"
+infoLabel.Text = "• Nitro e Pulo: precisa estar sentado no veículo.\n\n• Pneu: muda o Material das partes\n  Wheel dentro de FR / FL / RR / RL.\n\n• Crie botões arrastáveis e defina teclas.\n\n• Tecla padrão do menu: J"
 infoLabel.TextColor3 = Color3.fromRGB(120, 120, 140)
 infoLabel.Font = Enum.Font.Gotham
 infoLabel.TextSize = 12
@@ -370,9 +461,7 @@ infoLabel.TextXAlignment = Enum.TextXAlignment.Left
 infoLabel.TextYAlignment = Enum.TextYAlignment.Top
 infoLabel.Parent = pageSettings
 
--- ─────────────────────────────────────────────
--- BOTÃO ⚙️ (abrir/fechar + arrastável)
--- ─────────────────────────────────────────────
+-- MOBILE TOGGLE
 local mobileToggle = Instance.new("TextButton")
 mobileToggle.Name = "MobileToggle"
 mobileToggle.Size = UDim2.new(0, 48, 0, 48)
@@ -385,60 +474,56 @@ mobileToggle.Font = Enum.Font.GothamBold
 mobileToggle.AutoButtonColor = true
 mobileToggle.ZIndex = 50
 mobileToggle.Parent = screenGui
-
 Instance.new("UICorner", mobileToggle).CornerRadius = UDim.new(0, 12)
 
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(0, 140, 230)
-stroke.Thickness = 1.5
-stroke.Transparency = 0.4
-stroke.Parent = mobileToggle
+local mtStroke = Instance.new("UIStroke")
+mtStroke.Color = Color3.fromRGB(0, 140, 230)
+mtStroke.Thickness = 1.5
+mtStroke.Transparency = 0.4
+mtStroke.Parent = mobileToggle
 
--- Drag + Clique sem conflito
-local dragging = false
-local moved = false
-local dragStart, startPos
+do
+    local dragging, moved, dragStart, startPos = false, false, nil, nil
 
-mobileToggle.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        moved = false
-        dragStart = input.Position
-        startPos = mobileToggle.Position
-    end
-end)
-
-mobileToggle.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
-        if dragging and not moved then
-            -- foi só um clique → abre/fecha
-            isMenuOpen = not isMenuOpen
-            mainFrame.Visible = isMenuOpen
+    mobileToggle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            moved = false
+            dragStart = input.Position
+            startPos = mobileToggle.Position
         end
-        dragging = false
-        moved = false
-    end
-end)
+    end)
 
-UserInputService.InputChanged:Connect(function(input)
-    if not dragging then return end
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-    or input.UserInputType == Enum.UserInputType.Touch then
-        local delta = input.Position - dragStart
-        if math.abs(delta.X) > 6 or math.abs(delta.Y) > 6 then
-            moved = true
-            mobileToggle.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
+    mobileToggle.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            if dragging and not moved then
+                isMenuOpen = not isMenuOpen
+                mainFrame.Visible = isMenuOpen
+            end
+            dragging = false
+            moved = false
         end
-    end
-end)
--- ─────────────────────────────────────────────
--- VEHICLE HELPERS
--- ─────────────────────────────────────────────
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if not dragging then return end
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - dragStart
+            if math.abs(delta.X) > 6 or math.abs(delta.Y) > 6 then
+                moved = true
+                mobileToggle.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
+            end
+        end
+    end)
+end
+
+-- VEHICLE
 local function getVehicleRoot()
     local char = player.Character
     if not char then return nil end
@@ -449,12 +534,26 @@ local function getVehicleRoot()
     return seat.AssemblyRootPart or seat
 end
 
+local function getCarModel()
+    local root = getVehicleRoot()
+    if not root then return nil end
+    local current = root
+    for _ = 1, 8 do
+        if not current then break end
+        if current:IsA("Model") then
+            if current:FindFirstChild("FR") or current:FindFirstChild("FL")
+            or current:FindFirstChild("RR") or current:FindFirstChild("RL") then
+                return current
+            end
+        end
+        current = current.Parent
+    end
+    return root:FindFirstAncestorOfClass("Model") or root.Parent
+end
+
 local function stopBoost()
     isBoosting = false
-    if boostConn then
-        boostConn:Disconnect()
-        boostConn = nil
-    end
+    if boostConn then boostConn:Disconnect() boostConn = nil end
     if activeForce then pcall(function() activeForce:Destroy() end) activeForce = nil end
     if activeAtt then pcall(function() activeAtt:Destroy() end) activeAtt = nil end
     nitroStatus.Text = "Status: Pronto"
@@ -516,9 +615,54 @@ local function applyJump()
     end)
 end
 
--- ─────────────────────────────────────────────
--- CREATE FLOATING BUTTONS
--- ─────────────────────────────────────────────
+local function applyWheelMaterial()
+    local car = getCarModel()
+    if not car then
+        pneuStatus.Text = "❌ Entre no veículo primeiro!"
+        pneuStatus.TextColor3 = Color3.fromRGB(255, 120, 80)
+        return
+    end
+
+    local mat = MATERIALS[materialIndex]
+    local count = 0
+    local names = {"FR", "FL", "RR", "RL"}
+
+    for _, name in ipairs(names) do
+        local wheelModel = car:FindFirstChild(name, true)
+        if wheelModel then
+            local wheelPart = wheelModel:FindFirstChild("Wheel", true)
+            if wheelPart and wheelPart:IsA("BasePart") then
+                wheelPart.Material = mat
+                count = count + 1
+            elseif wheelModel:IsA("BasePart") then
+                wheelModel.Material = mat
+                count = count + 1
+            end
+        end
+    end
+
+    if count == 0 then
+        for _, desc in ipairs(car:GetDescendants()) do
+            if desc.Name == "Wheel" and desc:IsA("BasePart") then
+                desc.Material = mat
+                count = count + 1
+            end
+        end
+    end
+
+    if count > 0 then
+        pneuStatus.Text = "✅ Material " .. mat.Name .. " aplicado em " .. count .. " roda(s)!"
+        pneuStatus.TextColor3 = Color3.fromRGB(100, 220, 140)
+    else
+        pneuStatus.Text = "❌ Não encontrei FR/FL/RR/RL → Wheel\nVerifique a hierarquia do carro."
+        pneuStatus.TextColor3 = Color3.fromRGB(255, 120, 80)
+    end
+end
+
+local function updateMaterialLabel()
+    materialLabel.Text = MATERIALS[materialIndex].Name
+end
+
 local function createFloatingButton(name, text, color, callback, isHold)
     local old = screenGui:FindFirstChild(name)
     if old then old:Destroy() end
@@ -567,10 +711,7 @@ local function createFloatingButton(name, text, color, callback, isHold)
     return btn
 end
 
--- ─────────────────────────────────────────────
 -- CONNECTIONS
--- ─────────────────────────────────────────────
-
 nitroBox.FocusLost:Connect(function()
     local v = tonumber(nitroBox.Text)
     if v then
@@ -593,7 +734,6 @@ jumpBox.FocusLost:Connect(function()
     end
 end)
 
--- Create floating buttons
 createNitroBtn.MouseButton1Click:Connect(function()
     if nitroBtnExists then
         local old = screenGui:FindFirstChild("FloatingNitro")
@@ -624,7 +764,20 @@ createJumpBtn.MouseButton1Click:Connect(function()
     createJumpBtn.Text = "🗑️  Remover Botão de Pulo"
 end)
 
--- Keybinds
+leftArrow.MouseButton1Click:Connect(function()
+    materialIndex = materialIndex - 1
+    if materialIndex < 1 then materialIndex = #MATERIALS end
+    updateMaterialLabel()
+end)
+
+rightArrow.MouseButton1Click:Connect(function()
+    materialIndex = materialIndex + 1
+    if materialIndex > #MATERIALS then materialIndex = 1 end
+    updateMaterialLabel()
+end)
+
+applyBtn.MouseButton1Click:Connect(applyWheelMaterial)
+
 local function startBinding(tipo, btn)
     isBindingKey = true
     bindingType = tipo
@@ -644,44 +797,42 @@ menuKeyBtn.MouseButton1Click:Connect(function()
     startBinding("menu", menuKeyBtn)
 end)
 
--- Tabs
-tabNitro.MouseButton1Click:Connect(function()
-    pageNitro.Visible = true
+local function hideAllPages()
+    pageNitro.Visible = false
     pageJump.Visible = false
+    pagePneu.Visible = false
     pageSettings.Visible = false
-    setActiveTab(tabNitro, tabJump, tabSettings)
+end
+
+tabNitro.MouseButton1Click:Connect(function()
+    hideAllPages()
+    pageNitro.Visible = true
+    setActiveTab(tabNitro, tabJump, tabPneu, tabSettings)
 end)
 
 tabJump.MouseButton1Click:Connect(function()
-    pageNitro.Visible = false
+    hideAllPages()
     pageJump.Visible = true
-    pageSettings.Visible = false
-    setActiveTab(tabJump, tabNitro, tabSettings)
+    setActiveTab(tabJump, tabNitro, tabPneu, tabSettings)
+end)
+
+tabPneu.MouseButton1Click:Connect(function()
+    hideAllPages()
+    pagePneu.Visible = true
+    setActiveTab(tabPneu, tabNitro, tabJump, tabSettings)
 end)
 
 tabSettings.MouseButton1Click:Connect(function()
-    pageNitro.Visible = false
-    pageJump.Visible = false
+    hideAllPages()
     pageSettings.Visible = true
-    setActiveTab(tabSettings, tabNitro, tabJump)
+    setActiveTab(tabSettings, tabNitro, tabJump, tabPneu)
 end)
 
--- Close / Toggle
 closeBtn.MouseButton1Click:Connect(function()
     isMenuOpen = false
     mainFrame.Visible = false
 end)
 
-mobileToggle.Activated:Connect(function()
-    isMenuOpen = not isMenuOpen
-    mainFrame.Visible = isMenuOpen
-end)
-mobileToggle.MouseButton1Click:Connect(function()
-    isMenuOpen = not isMenuOpen
-    mainFrame.Visible = isMenuOpen
-end)
-
--- Input
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if isBindingKey and input.UserInputType == Enum.UserInputType.Keyboard then
         if bindingType == "nitro" then
