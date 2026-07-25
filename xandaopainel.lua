@@ -371,21 +371,71 @@ infoLabel.TextYAlignment = Enum.TextYAlignment.Top
 infoLabel.Parent = pageSettings
 
 -- ─────────────────────────────────────────────
--- MOBILE TOGGLE
+-- BOTÃO ⚙️ (abrir/fechar + arrastável)
 -- ─────────────────────────────────────────────
 local mobileToggle = Instance.new("TextButton")
 mobileToggle.Name = "MobileToggle"
-mobileToggle.Size = UDim2.new(0, 44, 0, 44)
-mobileToggle.Position = UDim2.new(0, 12, 0.5, -100)
+mobileToggle.Size = UDim2.new(0, 48, 0, 48)
+mobileToggle.Position = UDim2.new(0, 15, 0.45, 0)
 mobileToggle.BackgroundColor3 = Color3.fromRGB(28, 28, 38)
 mobileToggle.Text = "⚙️"
-mobileToggle.TextSize = 18
+mobileToggle.TextSize = 20
+mobileToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+mobileToggle.Font = Enum.Font.GothamBold
 mobileToggle.AutoButtonColor = true
+mobileToggle.ZIndex = 50
 mobileToggle.Parent = screenGui
-Instance.new("UICorner", mobileToggle).CornerRadius = UDim.new(0, 10)
 
-makeDraggable(mobileToggle)   -- ← adiciona essa linha
+Instance.new("UICorner", mobileToggle).CornerRadius = UDim.new(0, 12)
 
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(0, 140, 230)
+stroke.Thickness = 1.5
+stroke.Transparency = 0.4
+stroke.Parent = mobileToggle
+
+-- Drag + Clique sem conflito
+local dragging = false
+local moved = false
+local dragStart, startPos
+
+mobileToggle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        moved = false
+        dragStart = input.Position
+        startPos = mobileToggle.Position
+    end
+end)
+
+mobileToggle.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        if dragging and not moved then
+            -- foi só um clique → abre/fecha
+            isMenuOpen = not isMenuOpen
+            mainFrame.Visible = isMenuOpen
+        end
+        dragging = false
+        moved = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not dragging then return end
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+    or input.UserInputType == Enum.UserInputType.Touch then
+        local delta = input.Position - dragStart
+        if math.abs(delta.X) > 6 or math.abs(delta.Y) > 6 then
+            moved = true
+            mobileToggle.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end
+end)
 -- ─────────────────────────────────────────────
 -- VEHICLE HELPERS
 -- ─────────────────────────────────────────────
