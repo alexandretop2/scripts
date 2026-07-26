@@ -1,6 +1,7 @@
 --[[
     ⚡ CONTROL HUB
     Nitro | Pulo | Pneu | Ajustes
+    + Partículas NitroFire + cores hex
 ]]
 
 local UserInputService = game:GetService("UserInputService")
@@ -34,51 +35,41 @@ local activeAtt    = nil
 local nitroBtnExists = false
 local jumpBtnExists  = false
 
+-- Cores do nitro (hex) — padrão laranja/amarelo
+local nitroColor1Hex = "#FF5500"
+local nitroColor2Hex = "#FFAA00"
+
 local MATERIALS = {
-    Enum.Material.Plastic,
-    Enum.Material.SmoothPlastic,
-    Enum.Material.Neon,
-    Enum.Material.ForceField,
-    Enum.Material.Glass,
-    Enum.Material.Metal,
-    Enum.Material.DiamondPlate,
-    Enum.Material.CorrodedMetal,
-    Enum.Material.Foil,
-    Enum.Material.Wood,
-    Enum.Material.WoodPlanks,
-    Enum.Material.Marble,
-    Enum.Material.Slate,
-    Enum.Material.Concrete,
-    Enum.Material.Granite,
-    Enum.Material.Brick,
-    Enum.Material.Pebble,
-    Enum.Material.Cobblestone,
-    Enum.Material.Rock,
-    Enum.Material.Sandstone,
-    Enum.Material.Basalt,
-    Enum.Material.CrackedLava,
-    Enum.Material.Limestone,
-    Enum.Material.Pavement,
-    Enum.Material.Grass,
-    Enum.Material.LeafyGrass,
-    Enum.Material.Sand,
-    Enum.Material.Fabric,
-    Enum.Material.Ice,
-    Enum.Material.Glacier,
-    Enum.Material.Snow,
-    Enum.Material.Mud,
-    Enum.Material.Ground,
-    Enum.Material.Asphalt,
-    Enum.Material.Salt,
-    Enum.Material.Cardboard,
-    Enum.Material.Carpet,
-    Enum.Material.CeramicTiles,
-    Enum.Material.ClayRoofTiles,
-    Enum.Material.Plaster,
-    Enum.Material.Rubber,
-    Enum.Material.RoofShingles,
+    Enum.Material.Plastic, Enum.Material.SmoothPlastic, Enum.Material.Neon,
+    Enum.Material.ForceField, Enum.Material.Glass, Enum.Material.Metal,
+    Enum.Material.DiamondPlate, Enum.Material.CorrodedMetal, Enum.Material.Foil,
+    Enum.Material.Wood, Enum.Material.WoodPlanks, Enum.Material.Marble,
+    Enum.Material.Slate, Enum.Material.Concrete, Enum.Material.Granite,
+    Enum.Material.Brick, Enum.Material.Pebble, Enum.Material.Cobblestone,
+    Enum.Material.Rock, Enum.Material.Sandstone, Enum.Material.Basalt,
+    Enum.Material.CrackedLava, Enum.Material.Limestone, Enum.Material.Pavement,
+    Enum.Material.Grass, Enum.Material.LeafyGrass, Enum.Material.Sand,
+    Enum.Material.Fabric, Enum.Material.Ice, Enum.Material.Glacier,
+    Enum.Material.Snow, Enum.Material.Mud, Enum.Material.Ground,
+    Enum.Material.Asphalt, Enum.Material.Salt, Enum.Material.Cardboard,
+    Enum.Material.Carpet, Enum.Material.CeramicTiles, Enum.Material.ClayRoofTiles,
+    Enum.Material.Plaster, Enum.Material.Rubber, Enum.Material.RoofShingles,
 }
 local materialIndex = 1
+
+-- ─────────────────────────────────────────────
+-- HEX → Color3
+-- ─────────────────────────────────────────────
+local function hexToColor3(hex)
+    if type(hex) ~= "string" then return nil end
+    hex = hex:gsub("#", ""):gsub("%s", "")
+    if #hex ~= 6 then return nil end
+    local r = tonumber(hex:sub(1, 2), 16)
+    local g = tonumber(hex:sub(3, 4), 16)
+    local b = tonumber(hex:sub(5, 6), 16)
+    if not r or not g or not b then return nil end
+    return Color3.fromRGB(r, g, b)
+end
 
 local function makeDraggable(guiObject)
     local dragging, dragStart, startPos, moved
@@ -124,8 +115,8 @@ screenGui.Parent         = playerGui
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name             = "MainFrame"
-mainFrame.Size             = UDim2.new(0, 420, 0, 360)
-mainFrame.Position         = UDim2.new(0.5, -210, 0.5, -180)
+mainFrame.Size             = UDim2.new(0, 420, 0, 400)
+mainFrame.Position         = UDim2.new(0.5, -210, 0.5, -200)
 mainFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
 mainFrame.BorderSizePixel  = 0
 mainFrame.Visible          = true
@@ -219,7 +210,7 @@ pages.Parent = mainFrame
 local function createPage(name)
     local p = Instance.new("Frame")
     p.Name = name
-    p.Size = UDim2.new(1, -20, 0, 250)
+    p.Size = UDim2.new(1, -20, 0, 290)
     p.Position = UDim2.new(0, 10, 0, 95)
     p.BackgroundTransparency = 1
     p.Visible = false
@@ -235,11 +226,10 @@ pageNitro.Visible = true
 
 local function createSection(parent, title, y)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 28)
+    row.Size = UDim2.new(1, 0, 0, 24)
     row.Position = UDim2.new(0, 0, 0, y)
     row.BackgroundTransparency = 1
     row.Parent = parent
-
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
@@ -253,7 +243,7 @@ end
 
 local function createPowerRow(parent, labelText, defaultVal, y)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, 0, 0, 48)
+    row.Size = UDim2.new(1, 0, 0, 44)
     row.Position = UDim2.new(0, 0, 0, y)
     row.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
     row.BorderSizePixel = 0
@@ -261,36 +251,36 @@ local function createPowerRow(parent, labelText, defaultVal, y)
     Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
 
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0.55, 0, 0, 20)
-    label.Position = UDim2.new(0, 12, 0, 4)
+    label.Size = UDim2.new(0.55, 0, 0, 18)
+    label.Position = UDim2.new(0, 12, 0, 3)
     label.BackgroundTransparency = 1
     label.Text = labelText
     label.TextColor3 = Color3.fromRGB(200, 200, 215)
     label.Font = Enum.Font.Gotham
-    label.TextSize = 12
+    label.TextSize = 11
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = row
 
     local valueLabel = Instance.new("TextLabel")
-    valueLabel.Size = UDim2.new(0.4, 0, 0, 20)
-    valueLabel.Position = UDim2.new(0.55, 0, 0, 4)
+    valueLabel.Size = UDim2.new(0.4, 0, 0, 18)
+    valueLabel.Position = UDim2.new(0.55, 0, 0, 3)
     valueLabel.BackgroundTransparency = 1
     valueLabel.Text = tostring(defaultVal)
     valueLabel.TextColor3 = Color3.fromRGB(0, 180, 255)
     valueLabel.Font = Enum.Font.GothamBold
-    valueLabel.TextSize = 13
+    valueLabel.TextSize = 12
     valueLabel.TextXAlignment = Enum.TextXAlignment.Right
     valueLabel.Parent = row
 
     local box = Instance.new("TextBox")
-    box.Size = UDim2.new(1, -24, 0, 20)
-    box.Position = UDim2.new(0, 12, 0, 24)
+    box.Size = UDim2.new(1, -24, 0, 18)
+    box.Position = UDim2.new(0, 12, 0, 22)
     box.BackgroundColor3 = Color3.fromRGB(34, 34, 46)
     box.BorderSizePixel = 0
     box.Text = tostring(defaultVal)
     box.TextColor3 = Color3.fromRGB(255, 255, 255)
     box.Font = Enum.Font.GothamBold
-    box.TextSize = 12
+    box.TextSize = 11
     box.ClearTextOnFocus = false
     box.Parent = row
     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 5)
@@ -300,29 +290,81 @@ end
 
 local function createActionBtn(parent, text, y, color)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.Size = UDim2.new(1, 0, 0, 32)
     btn.Position = UDim2.new(0, 0, 0, y)
     btn.BackgroundColor3 = color or Color3.fromRGB(0, 140, 220)
     btn.BorderSizePixel = 0
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
+    btn.TextSize = 11
     btn.AutoButtonColor = true
     btn.Parent = parent
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     return btn
 end
 
--- NITRO
+local function createHexRow(parent, labelText, defaultHex, y)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 36)
+    row.Position = UDim2.new(0, 0, 0, y)
+    row.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
+    row.BorderSizePixel = 0
+    row.Parent = parent
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.4, 0, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = labelText
+    label.TextColor3 = Color3.fromRGB(200, 200, 215)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 11
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = row
+
+    local preview = Instance.new("Frame")
+    preview.Size = UDim2.new(0, 22, 0, 22)
+    preview.Position = UDim2.new(0.42, 0, 0.5, -11)
+    preview.BorderSizePixel = 0
+    preview.Parent = row
+    Instance.new("UICorner", preview).CornerRadius = UDim.new(0, 4)
+    local c = hexToColor3(defaultHex)
+    preview.BackgroundColor3 = c or Color3.fromRGB(255, 100, 0)
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0, 100, 0, 24)
+    box.Position = UDim2.new(1, -112, 0.5, -12)
+    box.BackgroundColor3 = Color3.fromRGB(34, 34, 46)
+    box.BorderSizePixel = 0
+    box.Text = defaultHex
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.Font = Enum.Font.GothamBold
+    box.TextSize = 12
+    box.ClearTextOnFocus = false
+    box.Parent = row
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 5)
+
+    return box, preview
+end
+
+-- ═══════════════════════════════════════════
+-- NITRO PAGE
+-- ═══════════════════════════════════════════
 createSection(pageNitro, "⚡  NITRO", 0)
-local nitroBox, nitroValLabel = createPowerRow(pageNitro, "Força do Nitro (100 - 1M)", BOOST_FORCE, 30)
-local createNitroBtn = createActionBtn(pageNitro, "📌  Criar Botão de Nitro (arrastável)", 90, Color3.fromRGB(230, 120, 0))
-local bindNitroBtn   = createActionBtn(pageNitro, "⌨️  Definir Tecla do Nitro  [" .. nitroKey.Name .. "]", 135, Color3.fromRGB(50, 50, 70))
+local nitroBox, nitroValLabel = createPowerRow(pageNitro, "Força do Nitro (100 - 1M)", BOOST_FORCE, 26)
+
+createSection(pageNitro, "🎨  COR DAS PARTÍCULAS", 78)
+local color1Box, color1Preview = createHexRow(pageNitro, "Cor Nitro 1", nitroColor1Hex, 102)
+local color2Box, color2Preview = createHexRow(pageNitro, "Cor Nitro 2", nitroColor2Hex, 142)
+
+local createNitroBtn = createActionBtn(pageNitro, "📌  Criar Botão de Nitro (arrastável)", 188, Color3.fromRGB(230, 120, 0))
+local bindNitroBtn   = createActionBtn(pageNitro, "⌨️  Definir Tecla do Nitro  [" .. nitroKey.Name .. "]", 226, Color3.fromRGB(50, 50, 70))
 
 local nitroStatus = Instance.new("TextLabel")
-nitroStatus.Size = UDim2.new(1, 0, 0, 20)
-nitroStatus.Position = UDim2.new(0, 0, 0, 185)
+nitroStatus.Size = UDim2.new(1, 0, 0, 18)
+nitroStatus.Position = UDim2.new(0, 0, 0, 268)
 nitroStatus.BackgroundTransparency = 1
 nitroStatus.Text = "Status: Pronto"
 nitroStatus.TextColor3 = Color3.fromRGB(100, 200, 120)
@@ -330,15 +372,17 @@ nitroStatus.Font = Enum.Font.Gotham
 nitroStatus.TextSize = 11
 nitroStatus.Parent = pageNitro
 
--- JUMP
+-- ═══════════════════════════════════════════
+-- JUMP PAGE
+-- ═══════════════════════════════════════════
 createSection(pageJump, "🦘  PULO", 0)
-local jumpBox, jumpValLabel = createPowerRow(pageJump, "Poder do Pulo (0 - 5000)", JUMP_FORCE, 30)
+local jumpBox, jumpValLabel = createPowerRow(pageJump, "Poder do Pulo (0 - 5000)", JUMP_FORCE, 28)
 local createJumpBtn = createActionBtn(pageJump, "📌  Criar Botão de Pulo (arrastável)", 90, Color3.fromRGB(0, 150, 220))
-local bindJumpBtn   = createActionBtn(pageJump, "⌨️  Definir Tecla do Pulo  [" .. jumpKey.Name .. "]", 135, Color3.fromRGB(50, 50, 70))
+local bindJumpBtn   = createActionBtn(pageJump, "⌨️  Definir Tecla do Pulo  [" .. jumpKey.Name .. "]", 132, Color3.fromRGB(50, 50, 70))
 
 local jumpStatus = Instance.new("TextLabel")
 jumpStatus.Size = UDim2.new(1, 0, 0, 20)
-jumpStatus.Position = UDim2.new(0, 0, 0, 185)
+jumpStatus.Position = UDim2.new(0, 0, 0, 180)
 jumpStatus.BackgroundTransparency = 1
 jumpStatus.Text = "Status: Pronto"
 jumpStatus.TextColor3 = Color3.fromRGB(100, 200, 120)
@@ -346,12 +390,14 @@ jumpStatus.Font = Enum.Font.Gotham
 jumpStatus.TextSize = 11
 jumpStatus.Parent = pageJump
 
--- PNEU
+-- ═══════════════════════════════════════════
+-- PNEU PAGE
+-- ═══════════════════════════════════════════
 createSection(pagePneu, "🛞  MATERIAL DO PNEU", 0)
 
 local selectorRow = Instance.new("Frame")
 selectorRow.Size = UDim2.new(1, 0, 0, 50)
-selectorRow.Position = UDim2.new(0, 0, 0, 40)
+selectorRow.Position = UDim2.new(0, 0, 0, 36)
 selectorRow.BackgroundColor3 = Color3.fromRGB(24, 24, 32)
 selectorRow.BorderSizePixel = 0
 selectorRow.Parent = pagePneu
@@ -393,11 +439,11 @@ materialLabel.Font = Enum.Font.GothamBold
 materialLabel.TextSize = 15
 materialLabel.Parent = selectorRow
 
-local applyBtn = createActionBtn(pagePneu, "✅  Aplicar Material nas Rodas", 105, Color3.fromRGB(0, 160, 100))
+local applyBtn = createActionBtn(pagePneu, "✅  Aplicar Material nas Rodas", 100, Color3.fromRGB(0, 160, 100))
 
 local pneuStatus = Instance.new("TextLabel")
 pneuStatus.Size = UDim2.new(1, 0, 0, 40)
-pneuStatus.Position = UDim2.new(0, 0, 0, 155)
+pneuStatus.Position = UDim2.new(0, 0, 0, 145)
 pneuStatus.BackgroundTransparency = 1
 pneuStatus.Text = "Procura: FR / FL / RR / RL → Wheel\nEntre no veículo e clique Aplicar."
 pneuStatus.TextColor3 = Color3.fromRGB(130, 130, 150)
@@ -407,17 +453,9 @@ pneuStatus.TextXAlignment = Enum.TextXAlignment.Left
 pneuStatus.TextYAlignment = Enum.TextYAlignment.Top
 pneuStatus.Parent = pagePneu
 
-local pneuInfo = Instance.new("TextLabel")
-pneuInfo.Size = UDim2.new(1, 0, 0, 30)
-pneuInfo.Position = UDim2.new(0, 0, 0, 210)
-pneuInfo.BackgroundTransparency = 1
-pneuInfo.Text = "Total de materiais: " .. #MATERIALS
-pneuInfo.TextColor3 = Color3.fromRGB(100, 100, 120)
-pneuInfo.Font = Enum.Font.Gotham
-pneuInfo.TextSize = 11
-pneuInfo.Parent = pagePneu
-
+-- ═══════════════════════════════════════════
 -- SETTINGS
+-- ═══════════════════════════════════════════
 local keybindRow = Instance.new("Frame")
 keybindRow.Size = UDim2.new(1, 0, 0, 50)
 keybindRow.Position = UDim2.new(0, 0, 0, 0)
@@ -450,10 +488,10 @@ menuKeyBtn.Parent = keybindRow
 Instance.new("UICorner", menuKeyBtn).CornerRadius = UDim.new(0, 6)
 
 local infoLabel = Instance.new("TextLabel")
-infoLabel.Size = UDim2.new(1, 0, 0, 140)
+infoLabel.Size = UDim2.new(1, 0, 0, 160)
 infoLabel.Position = UDim2.new(0, 0, 0, 65)
 infoLabel.BackgroundTransparency = 1
-infoLabel.Text = "• Nitro e Pulo: precisa estar sentado no veículo.\n\n• Pneu: muda o Material das partes\n  Wheel dentro de FR / FL / RR / RL.\n\n• Crie botões arrastáveis e defina teclas.\n\n• Tecla padrão do menu: J"
+infoLabel.Text = "• Nitro: força + partículas NitroFire do jogo\n  (Body → Exhaust → ExhaustPart → NitroFire)\n\n• Cores: digite #RRGGBB (ex: #00FFFF)\n\n• Pneu: FR/FL/RR/RL → Wheel\n\n• Tecla padrão do menu: J"
 infoLabel.TextColor3 = Color3.fromRGB(120, 120, 140)
 infoLabel.Font = Enum.Font.Gotham
 infoLabel.TextSize = 12
@@ -484,7 +522,6 @@ mtStroke.Parent = mobileToggle
 
 do
     local dragging, moved, dragStart, startPos = false, false, nil, nil
-
     mobileToggle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
@@ -494,7 +531,6 @@ do
             startPos = mobileToggle.Position
         end
     end)
-
     mobileToggle.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
@@ -506,7 +542,6 @@ do
             moved = false
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if not dragging then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
@@ -523,7 +558,9 @@ do
     end)
 end
 
--- VEHICLE
+-- ═══════════════════════════════════════════
+-- VEHICLE / PARTICLES
+-- ═══════════════════════════════════════════
 local function getVehicleRoot()
     local char = player.Character
     if not char then return nil end
@@ -538,11 +575,11 @@ local function getCarModel()
     local root = getVehicleRoot()
     if not root then return nil end
     local current = root
-    for _ = 1, 8 do
+    for _ = 1, 10 do
         if not current then break end
         if current:IsA("Model") then
-            if current:FindFirstChild("FR") or current:FindFirstChild("FL")
-            or current:FindFirstChild("RR") or current:FindFirstChild("RL") then
+            if current:FindFirstChild("Body") or current:FindFirstChild("FR")
+            or current:FindFirstChild("FL") then
                 return current
             end
         end
@@ -551,11 +588,58 @@ local function getCarModel()
     return root:FindFirstAncestorOfClass("Model") or root.Parent
 end
 
+-- Encontra todos os ParticleEmitter "NitroFire"
+local function getNitroParticles()
+    local car = getCarModel()
+    if not car then return {} end
+    local list = {}
+    local body = car:FindFirstChild("Body") or car
+    for _, desc in ipairs(body:GetDescendants()) do
+        if desc.Name == "NitroFire" and desc:IsA("ParticleEmitter") then
+            table.insert(list, desc)
+        end
+    end
+    -- fallback global no carro
+    if #list == 0 then
+        for _, desc in ipairs(car:GetDescendants()) do
+            if desc.Name == "NitroFire" and desc:IsA("ParticleEmitter") then
+                table.insert(list, desc)
+            end
+        end
+    end
+    return list
+end
+
+local function applyNitroColors()
+    local c1 = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0)
+    local c2 = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0)
+    local seq = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, c1),
+        ColorSequenceKeypoint.new(1, c2),
+    })
+    for _, pe in ipairs(getNitroParticles()) do
+        pe.Color = seq
+    end
+end
+
+local function setNitroParticlesEnabled(enabled)
+    local particles = getNitroParticles()
+    for _, pe in ipairs(particles) do
+        pe.Enabled = enabled
+        if enabled then
+            -- garante que as cores estejam aplicadas
+            applyNitroColors()
+        end
+    end
+    return #particles
+end
+
 local function stopBoost()
     isBoosting = false
     if boostConn then boostConn:Disconnect() boostConn = nil end
     if activeForce then pcall(function() activeForce:Destroy() end) activeForce = nil end
     if activeAtt then pcall(function() activeAtt:Destroy() end) activeAtt = nil end
+    setNitroParticlesEnabled(false)
     nitroStatus.Text = "Status: Pronto"
     nitroStatus.TextColor3 = Color3.fromRGB(100, 200, 120)
 end
@@ -587,8 +671,14 @@ local function startBoost()
     activeForce.ApplyAtCenterOfMass = true
     activeForce.Parent = root
 
+    local count = setNitroParticlesEnabled(true)
+
     isBoosting = true
-    nitroStatus.Text = "Status: NITRO ATIVO ⚡"
+    if count > 0 then
+        nitroStatus.Text = "Status: NITRO ATIVO ⚡ (" .. count .. " partículas)"
+    else
+        nitroStatus.Text = "Status: NITRO ATIVO ⚡ (sem NitroFire)"
+    end
     nitroStatus.TextColor3 = Color3.fromRGB(255, 180, 50)
 
     boostConn = RunService.Heartbeat:Connect(function()
@@ -654,7 +744,7 @@ local function applyWheelMaterial()
         pneuStatus.Text = "✅ Material " .. mat.Name .. " aplicado em " .. count .. " roda(s)!"
         pneuStatus.TextColor3 = Color3.fromRGB(100, 220, 140)
     else
-        pneuStatus.Text = "❌ Não encontrei FR/FL/RR/RL → Wheel\nVerifique a hierarquia do carro."
+        pneuStatus.Text = "❌ Não encontrei FR/FL/RR/RL → Wheel"
         pneuStatus.TextColor3 = Color3.fromRGB(255, 120, 80)
     end
 end
@@ -707,11 +797,12 @@ local function createFloatingButton(name, text, color, callback, isHold)
         btn.Activated:Connect(function() callback() end)
         btn.MouseButton1Click:Connect(function() callback() end)
     end
-
     return btn
 end
 
+-- ═══════════════════════════════════════════
 -- CONNECTIONS
+-- ═══════════════════════════════════════════
 nitroBox.FocusLost:Connect(function()
     local v = tonumber(nitroBox.Text)
     if v then
@@ -731,6 +822,34 @@ jumpBox.FocusLost:Connect(function()
         jumpValLabel.Text = tostring(JUMP_FORCE)
     else
         jumpBox.Text = tostring(JUMP_FORCE)
+    end
+end)
+
+color1Box.FocusLost:Connect(function()
+    local text = color1Box.Text
+    if not text:match("^#") then text = "#" .. text end
+    local c = hexToColor3(text)
+    if c then
+        nitroColor1Hex = text:upper()
+        color1Box.Text = nitroColor1Hex
+        color1Preview.BackgroundColor3 = c
+        applyNitroColors()
+    else
+        color1Box.Text = nitroColor1Hex
+    end
+end)
+
+color2Box.FocusLost:Connect(function()
+    local text = color2Box.Text
+    if not text:match("^#") then text = "#" .. text end
+    local c = hexToColor3(text)
+    if c then
+        nitroColor2Hex = text:upper()
+        color2Box.Text = nitroColor2Hex
+        color2Preview.BackgroundColor3 = c
+        applyNitroColors()
+    else
+        color2Box.Text = nitroColor2Hex
     end
 end)
 
@@ -788,11 +907,9 @@ end
 bindNitroBtn.MouseButton1Click:Connect(function()
     startBinding("nitro", bindNitroBtn)
 end)
-
 bindJumpBtn.MouseButton1Click:Connect(function()
     startBinding("jump", bindJumpBtn)
 end)
-
 menuKeyBtn.MouseButton1Click:Connect(function()
     startBinding("menu", menuKeyBtn)
 end)
@@ -809,19 +926,16 @@ tabNitro.MouseButton1Click:Connect(function()
     pageNitro.Visible = true
     setActiveTab(tabNitro, tabJump, tabPneu, tabSettings)
 end)
-
 tabJump.MouseButton1Click:Connect(function()
     hideAllPages()
     pageJump.Visible = true
     setActiveTab(tabJump, tabNitro, tabPneu, tabSettings)
 end)
-
 tabPneu.MouseButton1Click:Connect(function()
     hideAllPages()
     pagePneu.Visible = true
     setActiveTab(tabPneu, tabNitro, tabJump, tabSettings)
 end)
-
 tabSettings.MouseButton1Click:Connect(function()
     hideAllPages()
     pageSettings.Visible = true
@@ -859,11 +973,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         isMenuOpen = not isMenuOpen
         mainFrame.Visible = isMenuOpen
     end
-
     if input.KeyCode == nitroKey then
         startBoost()
     end
-
     if input.KeyCode == jumpKey then
         applyJump()
     end
