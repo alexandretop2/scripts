@@ -1,7 +1,6 @@
 --[[
-    ⚡ LIVERY GUI - Body Paint (Pro Edition)
-    Draggable • Mobile toggle ball • Pre-made + Custom liveries
-    Style inspired by Driving Empire / modern car games
+    ⚡ LIVERY GUI - Body Paint (Driving Empire Style)
+    Draggable • Mobile ball • Pre-made + Custom with Part + Face selectors
 ]]
 
 local Players = game:GetService("Players")
@@ -11,7 +10,7 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ==================== LIVERY DATA (unchanged) ====================
+-- ==================== LIVERY DATA ====================
 local function D(t)
 	return {
 		Top = t[1], Left = t[2], Right = t[3],
@@ -73,41 +72,34 @@ end
 
 local function createStroke(parent, color, thickness)
 	local s = Instance.new("UIStroke")
-	s.Color = color or Color3.fromRGB(60, 60, 60)
+	s.Color = color or Color3.fromRGB(50, 50, 60)
 	s.Thickness = thickness or 1
 	s.Parent = parent
 	return s
 end
 
-local function tween(obj, props, time, style)
-	local t = TweenService:Create(obj, TweenInfo.new(time or 0.25, style or Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
-	t:Play()
-	return t
-end
-
--- ==================== GUI ROOT ====================
+-- ==================== GUI ====================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "LiveryGUI_Pro"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = playerGui
 
--- ==================== FLOATING TOGGLE BALL (Mobile + Desktop) ====================
+-- Toggle Ball
 local ToggleBall = Instance.new("TextButton")
 ToggleBall.Name = "ToggleBall"
-ToggleBall.Size = UDim2.new(0, 58, 0, 58)
-ToggleBall.Position = UDim2.new(1, -78, 0.5, -29)
-ToggleBall.BackgroundColor3 = Color3.fromRGB(180, 20, 20)
+ToggleBall.Size = UDim2.new(0, 52, 0, 52)
+ToggleBall.Position = UDim2.new(1, -72, 0.5, -26)
+ToggleBall.BackgroundColor3 = Color3.fromRGB(190, 25, 25)
 ToggleBall.Text = "⚡"
 ToggleBall.TextColor3 = Color3.new(1, 1, 1)
 ToggleBall.TextScaled = true
 ToggleBall.Font = Enum.Font.GothamBold
 ToggleBall.AutoButtonColor = false
 ToggleBall.Parent = ScreenGui
-createCorner(ToggleBall, 29)
-createStroke(ToggleBall, Color3.fromRGB(255, 80, 80), 2)
+createCorner(ToggleBall, 26)
+createStroke(ToggleBall, Color3.fromRGB(255, 70, 70), 1.5)
 
--- make the ball draggable too
 do
 	local dragging, dragStart, startPos
 	ToggleBall.InputBegan:Connect(function(input)
@@ -130,39 +122,38 @@ do
 	end)
 end
 
--- ==================== MAIN PANEL ====================
+-- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 480, 0, 560)
-MainFrame.Position = UDim2.new(0.5, -240, 0.5, -280)
-MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+MainFrame.Size = UDim2.new(0, 420, 0, 540)
+MainFrame.Position = UDim2.new(0.5, -210, 0.5, -270)
+MainFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
-createCorner(MainFrame, 14)
-createStroke(MainFrame, Color3.fromRGB(45, 45, 55), 1.5)
+createCorner(MainFrame, 12)
+createStroke(MainFrame, Color3.fromRGB(40, 40, 50), 1.2)
 
--- Title bar (drag handle)
+-- Title Bar
 local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1, 0, 0, 52)
-TitleBar.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+TitleBar.Size = UDim2.new(1, 0, 0, 46)
+TitleBar.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
-createCorner(TitleBar, 14)
+createCorner(TitleBar, 12)
 
--- fix bottom corners of title
 local TitleFix = Instance.new("Frame")
-TitleFix.Size = UDim2.new(1, 0, 0, 20)
-TitleFix.Position = UDim2.new(0, 0, 1, -20)
-TitleFix.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+TitleFix.Size = UDim2.new(1, 0, 0, 16)
+TitleFix.Position = UDim2.new(0, 0, 1, -16)
+TitleFix.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
 TitleFix.BorderSizePixel = 0
 TitleFix.Parent = TitleBar
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -60, 1, 0)
-Title.Position = UDim2.new(0, 16, 0, 0)
+Title.Size = UDim2.new(1, -50, 1, 0)
+Title.Position = UDim2.new(0, 14, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "⚡  LIVERY SELECTOR"
+Title.Text = "⚡  LIVERY"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.TextScaled = true
@@ -170,17 +161,16 @@ Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
 
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 36, 0, 36)
-CloseBtn.Position = UDim2.new(1, -44, 0.5, -18)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+CloseBtn.Size = UDim2.new(0, 32, 0, 32)
+CloseBtn.Position = UDim2.new(1, -39, 0.5, -16)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(170, 35, 35)
 CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = Color3.new(1, 1, 1)
 CloseBtn.TextScaled = true
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.Parent = TitleBar
-createCorner(CloseBtn, 8)
+createCorner(CloseBtn, 7)
 
--- Dragging the whole panel by the title bar
 do
 	local dragging, dragStart, startPos
 	TitleBar.InputBegan:Connect(function(input)
@@ -203,24 +193,24 @@ do
 	end)
 end
 
--- ==================== TABS ====================
+-- Tabs
 local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(1, -24, 0, 42)
-TabContainer.Position = UDim2.new(0, 12, 0, 62)
+TabContainer.Size = UDim2.new(1, -20, 0, 36)
+TabContainer.Position = UDim2.new(0, 10, 0, 54)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Parent = MainFrame
 
-local function makeTab(name, posX)
+local function makeTab(name, x)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0.5, -6, 1, 0)
-	btn.Position = UDim2.new(posX, 0, 0, 0)
-	btn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+	btn.Size = UDim2.new(0.5, -5, 1, 0)
+	btn.Position = UDim2.new(x, 0, 0, 0)
+	btn.BackgroundColor3 = Color3.fromRGB(32, 32, 40)
 	btn.Text = name
-	btn.TextColor3 = Color3.fromRGB(180, 180, 190)
+	btn.TextColor3 = Color3.fromRGB(160, 160, 175)
 	btn.TextScaled = true
 	btn.Font = Enum.Font.GothamSemibold
 	btn.Parent = TabContainer
-	createCorner(btn, 8)
+	createCorner(btn, 7)
 	return btn
 end
 
@@ -228,8 +218,8 @@ local TabLiveries = makeTab("LIVERIES", 0)
 local TabCustom = makeTab("CUSTOM", 0.5)
 
 local Content = Instance.new("Frame")
-Content.Size = UDim2.new(1, -24, 1, -120)
-Content.Position = UDim2.new(0, 12, 0, 112)
+Content.Size = UDim2.new(1, -20, 1, -100)
+Content.Position = UDim2.new(0, 10, 0, 98)
 Content.BackgroundTransparency = 1
 Content.Parent = MainFrame
 
@@ -240,36 +230,40 @@ LiveriesFrame.BackgroundTransparency = 1
 LiveriesFrame.Parent = Content
 
 local CarList = Instance.new("ScrollingFrame")
-CarList.Size = UDim2.new(0.48, -6, 1, 0)
-CarList.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+CarList.Size = UDim2.new(0.48, -5, 1, 0)
+CarList.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 CarList.BorderSizePixel = 0
-CarList.ScrollBarThickness = 4
+CarList.ScrollBarThickness = 3
 CarList.ScrollBarImageColor3 = Color3.fromRGB(180, 40, 40)
-CarList.CanvasSize = UDim2.new(0, 0, 0, 0)
 CarList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+CarList.CanvasSize = UDim2.new(0, 0, 0, 0)
 CarList.Parent = LiveriesFrame
-createCorner(CarList, 10)
+createCorner(CarList, 9)
 
 local LiveryList = Instance.new("ScrollingFrame")
-LiveryList.Size = UDim2.new(0.48, -6, 1, 0)
+LiveryList.Size = UDim2.new(0.48, -5, 1, 0)
 LiveryList.Position = UDim2.new(0.52, 0, 0, 0)
-LiveryList.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+LiveryList.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 LiveryList.BorderSizePixel = 0
-LiveryList.ScrollBarThickness = 4
+LiveryList.ScrollBarThickness = 3
 LiveryList.ScrollBarImageColor3 = Color3.fromRGB(180, 40, 40)
-LiveryList.CanvasSize = UDim2.new(0, 0, 0, 0)
 LiveryList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+LiveryList.CanvasSize = UDim2.new(0, 0, 0, 0)
 LiveryList.Parent = LiveriesFrame
-createCorner(LiveryList, 10)
+createCorner(LiveryList, 9)
 
-Instance.new("UIListLayout", CarList).Padding = UDim.new(0, 6)
-Instance.new("UIListLayout", LiveryList).Padding = UDim.new(0, 6)
-Instance.new("UIPadding", CarList).PaddingTop = UDim.new(0, 8)
-Instance.new("UIPadding", CarList).PaddingLeft = UDim.new(0, 8)
-Instance.new("UIPadding", CarList).PaddingRight = UDim.new(0, 8)
-Instance.new("UIPadding", LiveryList).PaddingTop = UDim.new(0, 8)
-Instance.new("UIPadding", LiveryList).PaddingLeft = UDim.new(0, 8)
-Instance.new("UIPadding", LiveryList).PaddingRight = UDim.new(0, 8)
+Instance.new("UIListLayout", CarList).Padding = UDim.new(0, 5)
+Instance.new("UIListLayout", LiveryList).Padding = UDim.new(0, 5)
+
+local pad1 = Instance.new("UIPadding", CarList)
+pad1.PaddingTop = UDim.new(0, 6)
+pad1.PaddingLeft = UDim.new(0, 6)
+pad1.PaddingRight = UDim.new(0, 6)
+
+local pad2 = Instance.new("UIPadding", LiveryList)
+pad2.PaddingTop = UDim.new(0, 6)
+pad2.PaddingLeft = UDim.new(0, 6)
+pad2.PaddingRight = UDim.new(0, 6)
 
 -- ==================== CUSTOM TAB ====================
 local CustomFrame = Instance.new("Frame")
@@ -278,125 +272,222 @@ CustomFrame.BackgroundTransparency = 1
 CustomFrame.Visible = false
 CustomFrame.Parent = Content
 
-local FaceLabel = Instance.new("TextLabel")
-FaceLabel.Size = UDim2.new(1, 0, 0, 28)
-FaceLabel.BackgroundTransparency = 1
-FaceLabel.Text = "SELECT FACE"
-FaceLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
-FaceLabel.TextXAlignment = Enum.TextXAlignment.Left
-FaceLabel.TextScaled = true
-FaceLabel.Font = Enum.Font.GothamSemibold
-FaceLabel.Parent = CustomFrame
-
-local FaceGrid = Instance.new("Frame")
-FaceGrid.Size = UDim2.new(1, 0, 0, 110)
-FaceGrid.Position = UDim2.new(0, 0, 0, 34)
-FaceGrid.BackgroundTransparency = 1
-FaceGrid.Parent = CustomFrame
+-- Part names that the script will look for
+local partNames = {"Body", "Paint", "Paint1", "Paint2", "Paint3", "Paint4", "BodyPaint"}
+local partIndex = 1
+local selectedPartName = partNames[1]
 
 local faces = {"Top", "Bottom", "Left", "Right", "Front", "Back"}
-local selectedFace = "Top"
-local faceButtons = {}
+local faceIndex = 1
+local selectedFace = faces[1]
 
-local function updateFaceButtons()
-	for name, btn in pairs(faceButtons) do
-		if name == selectedFace then
-			btn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
-			btn.TextColor3 = Color3.new(1, 1, 1)
-		else
-			btn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-			btn.TextColor3 = Color3.fromRGB(180, 180, 190)
-		end
-	end
-end
+-- ===== Onde será aplicado =====
+local PartLabel = Instance.new("TextLabel")
+PartLabel.Size = UDim2.new(1, 0, 0, 18)
+PartLabel.Position = UDim2.new(0, 0, 0, 0)
+PartLabel.BackgroundTransparency = 1
+PartLabel.Text = "Onde será aplicado:"
+PartLabel.TextColor3 = Color3.fromRGB(150, 150, 165)
+PartLabel.TextXAlignment = Enum.TextXAlignment.Left
+PartLabel.TextScaled = true
+PartLabel.Font = Enum.Font.GothamSemibold
+PartLabel.Parent = CustomFrame
 
-for i, face in ipairs(faces) do
-	local row = math.ceil(i / 3)
-	local col = (i - 1) % 3
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0.32, -4, 0, 46)
-	btn.Position = UDim2.new(col * 0.34, 0, (row - 1) * 0.52, 0)
-	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-	btn.Text = face
-	btn.TextColor3 = Color3.fromRGB(180, 180, 190)
-	btn.TextScaled = true
-	btn.Font = Enum.Font.GothamSemibold
-	btn.Parent = FaceGrid
-	createCorner(btn, 8)
-	faceButtons[face] = btn
+local PartSelector = Instance.new("Frame")
+PartSelector.Size = UDim2.new(1, 0, 0, 34)
+PartSelector.Position = UDim2.new(0, 0, 0, 20)
+PartSelector.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
+PartSelector.Parent = CustomFrame
+createCorner(PartSelector, 8)
 
-	btn.MouseButton1Click:Connect(function()
-		selectedFace = face
-		updateFaceButtons()
-	end)
-end
-updateFaceButtons()
+local PartLeft = Instance.new("TextButton")
+PartLeft.Size = UDim2.new(0, 38, 1, 0)
+PartLeft.BackgroundTransparency = 1
+PartLeft.Text = "◀"
+PartLeft.TextColor3 = Color3.fromRGB(220, 220, 230)
+PartLeft.TextScaled = true
+PartLeft.Font = Enum.Font.GothamBold
+PartLeft.Parent = PartSelector
 
-local IdLabel = Instance.new("TextLabel")
-IdLabel.Size = UDim2.new(1, 0, 0, 28)
-IdLabel.Position = UDim2.new(0, 0, 0, 156)
-IdLabel.BackgroundTransparency = 1
-IdLabel.Text = "DECAL / TEXTURE ID"
-IdLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
-IdLabel.TextXAlignment = Enum.TextXAlignment.Left
-IdLabel.TextScaled = true
-IdLabel.Font = Enum.Font.GothamSemibold
-IdLabel.Parent = CustomFrame
+local PartNameLabel = Instance.new("TextLabel")
+PartNameLabel.Size = UDim2.new(1, -76, 1, 0)
+PartNameLabel.Position = UDim2.new(0, 38, 0, 0)
+PartNameLabel.BackgroundTransparency = 1
+PartNameLabel.Text = selectedPartName
+PartNameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+PartNameLabel.TextScaled = true
+PartNameLabel.Font = Enum.Font.GothamBold
+PartNameLabel.Parent = PartSelector
 
+local PartRight = Instance.new("TextButton")
+PartRight.Size = UDim2.new(0, 38, 1, 0)
+PartRight.Position = UDim2.new(1, -38, 0, 0)
+PartRight.BackgroundTransparency = 1
+PartRight.Text = "▶"
+PartRight.TextColor3 = Color3.fromRGB(220, 220, 230)
+PartRight.TextScaled = true
+PartRight.Font = Enum.Font.GothamBold
+PartRight.Parent = PartSelector
+
+PartLeft.MouseButton1Click:Connect(function()
+	partIndex = partIndex - 1
+	if partIndex < 1 then partIndex = #partNames end
+	selectedPartName = partNames[partIndex]
+	PartNameLabel.Text = selectedPartName
+end)
+
+PartRight.MouseButton1Click:Connect(function()
+	partIndex = partIndex + 1
+	if partIndex > #partNames then partIndex = 1 end
+	selectedPartName = partNames[partIndex]
+	PartNameLabel.Text = selectedPartName
+end)
+
+-- ===== Face do decal =====
+local FaceTitle = Instance.new("TextLabel")
+FaceTitle.Size = UDim2.new(1, 0, 0, 18)
+FaceTitle.Position = UDim2.new(0, 0, 0, 60)
+FaceTitle.BackgroundTransparency = 1
+FaceTitle.Text = "Face do decal:"
+FaceTitle.TextColor3 = Color3.fromRGB(150, 150, 165)
+FaceTitle.TextXAlignment = Enum.TextXAlignment.Left
+FaceTitle.TextScaled = true
+FaceTitle.Font = Enum.Font.GothamSemibold
+FaceTitle.Parent = CustomFrame
+
+local FaceSelector = Instance.new("Frame")
+FaceSelector.Size = UDim2.new(1, 0, 0, 34)
+FaceSelector.Position = UDim2.new(0, 0, 0, 80)
+FaceSelector.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
+FaceSelector.Parent = CustomFrame
+createCorner(FaceSelector, 8)
+
+local FaceLeft = Instance.new("TextButton")
+FaceLeft.Size = UDim2.new(0, 38, 1, 0)
+FaceLeft.BackgroundTransparency = 1
+FaceLeft.Text = "◀"
+FaceLeft.TextColor3 = Color3.fromRGB(220, 220, 230)
+FaceLeft.TextScaled = true
+FaceLeft.Font = Enum.Font.GothamBold
+FaceLeft.Parent = FaceSelector
+
+local FaceLabel = Instance.new("TextLabel")
+FaceLabel.Size = UDim2.new(1, -76, 1, 0)
+FaceLabel.Position = UDim2.new(0, 38, 0, 0)
+FaceLabel.BackgroundTransparency = 1
+FaceLabel.Text = selectedFace:upper()
+FaceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+FaceLabel.TextScaled = true
+FaceLabel.Font = Enum.Font.GothamBold
+FaceLabel.Parent = FaceSelector
+
+local FaceRight = Instance.new("TextButton")
+FaceRight.Size = UDim2.new(0, 38, 1, 0)
+FaceRight.Position = UDim2.new(1, -38, 0, 0)
+FaceRight.BackgroundTransparency = 1
+FaceRight.Text = "▶"
+FaceRight.TextColor3 = Color3.fromRGB(220, 220, 230)
+FaceRight.TextScaled = true
+FaceRight.Font = Enum.Font.GothamBold
+FaceRight.Parent = FaceSelector
+
+FaceLeft.MouseButton1Click:Connect(function()
+	faceIndex = faceIndex - 1
+	if faceIndex < 1 then faceIndex = #faces end
+	selectedFace = faces[faceIndex]
+	FaceLabel.Text = selectedFace:upper()
+end)
+
+FaceRight.MouseButton1Click:Connect(function()
+	faceIndex = faceIndex + 1
+	if faceIndex > #faces then faceIndex = 1 end
+	selectedFace = faces[faceIndex]
+	FaceLabel.Text = selectedFace:upper()
+end)
+
+-- ID Box
 local IdBox = Instance.new("TextBox")
-IdBox.Size = UDim2.new(1, 0, 0, 48)
-IdBox.Position = UDim2.new(0, 0, 0, 188)
-IdBox.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+IdBox.Size = UDim2.new(1, 0, 0, 36)
+IdBox.Position = UDim2.new(0, 0, 0, 122)
+IdBox.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
 IdBox.Text = ""
-IdBox.PlaceholderText = "rbxassetid://123456789 or just the number"
-IdBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 110)
+IdBox.PlaceholderText = "Decal ID (ex: 123456789)"
+IdBox.PlaceholderColor3 = Color3.fromRGB(90, 90, 100)
 IdBox.TextColor3 = Color3.new(1, 1, 1)
 IdBox.TextScaled = true
 IdBox.Font = Enum.Font.Gotham
 IdBox.ClearTextOnFocus = false
 IdBox.Parent = CustomFrame
-createCorner(IdBox, 10)
-createStroke(IdBox, Color3.fromRGB(55, 55, 65), 1)
+createCorner(IdBox, 8)
+createStroke(IdBox, Color3.fromRGB(50, 50, 60), 1)
 
+-- Apply Button
 local ApplyCustomBtn = Instance.new("TextButton")
-ApplyCustomBtn.Size = UDim2.new(1, 0, 0, 52)
-ApplyCustomBtn.Position = UDim2.new(0, 0, 0, 252)
+ApplyCustomBtn.Size = UDim2.new(1, 0, 0, 36)
+ApplyCustomBtn.Position = UDim2.new(0, 0, 0, 166)
 ApplyCustomBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
-ApplyCustomBtn.Text = "APPLY DECAL TO SELECTED FACE"
+ApplyCustomBtn.Text = "APPLY DECAL"
 ApplyCustomBtn.TextColor3 = Color3.new(1, 1, 1)
 ApplyCustomBtn.TextScaled = true
 ApplyCustomBtn.Font = Enum.Font.GothamBold
 ApplyCustomBtn.Parent = CustomFrame
-createCorner(ApplyCustomBtn, 10)
+createCorner(ApplyCustomBtn, 8)
 
+-- Clear All
 local ClearBtn = Instance.new("TextButton")
-ClearBtn.Size = UDim2.new(1, 0, 0, 46)
-ClearBtn.Position = UDim2.new(0, 0, 0, 316)
-ClearBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 58)
-ClearBtn.Text = "CLEAR ALL DECALS"
-ClearBtn.TextColor3 = Color3.fromRGB(220, 220, 230)
+ClearBtn.Size = UDim2.new(1, 0, 0, 32)
+ClearBtn.Position = UDim2.new(0, 0, 0, 208)
+ClearBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+ClearBtn.Text = "CLEAR ALL"
+ClearBtn.TextColor3 = Color3.fromRGB(210, 210, 220)
 ClearBtn.TextScaled = true
 ClearBtn.Font = Enum.Font.GothamSemibold
 ClearBtn.Parent = CustomFrame
-createCorner(ClearBtn, 10)
+createCorner(ClearBtn, 8)
 
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(1, 0, 0, 30)
-StatusLabel.Position = UDim2.new(0, 0, 0, 375)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = ""
-StatusLabel.TextColor3 = Color3.fromRGB(100, 220, 120)
-StatusLabel.TextScaled = true
-StatusLabel.Font = Enum.Font.Gotham
-StatusLabel.Parent = CustomFrame
+-- Your Decals label
+local ListTitle = Instance.new("TextLabel")
+ListTitle.Size = UDim2.new(1, 0, 0, 20)
+ListTitle.Position = UDim2.new(0, 0, 0, 248)
+ListTitle.BackgroundTransparency = 1
+ListTitle.Text = "YOUR DECALS"
+ListTitle.TextColor3 = Color3.fromRGB(140, 140, 155)
+ListTitle.TextXAlignment = Enum.TextXAlignment.Left
+ListTitle.TextScaled = true
+ListTitle.Font = Enum.Font.GothamSemibold
+ListTitle.Parent = CustomFrame
 
--- ==================== CORE FUNCTIONS ====================
+-- Decals List
+local DecalList = Instance.new("ScrollingFrame")
+DecalList.Size = UDim2.new(1, 0, 1, -274)
+DecalList.Position = UDim2.new(0, 0, 0, 272)
+DecalList.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+DecalList.BorderSizePixel = 0
+DecalList.ScrollBarThickness = 3
+DecalList.ScrollBarImageColor3 = Color3.fromRGB(180, 40, 40)
+DecalList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+DecalList.CanvasSize = UDim2.new(0, 0, 0, 0)
+DecalList.Parent = CustomFrame
+createCorner(DecalList, 9)
+
+local listLayout = Instance.new("UIListLayout", DecalList)
+listLayout.Padding = UDim.new(0, 5)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local listPad = Instance.new("UIPadding", DecalList)
+listPad.PaddingTop = UDim.new(0, 6)
+listPad.PaddingLeft = UDim.new(0, 6)
+listPad.PaddingRight = UDim.new(0, 6)
+listPad.PaddingBottom = UDim.new(0, 6)
+
+-- ==================== LOGIC ====================
+local customDecals = {} -- {partName, face, id, instance}
+
 local function getCurrentCar()
 	local char = player.Character
 	if not char then return nil end
 	local humanoid = char:FindFirstChildOfClass("Humanoid")
 	if not humanoid then return nil end
-
 	for _, seat in ipairs(workspace:GetDescendants()) do
 		if seat:IsA("VehicleSeat") and seat.Occupant == humanoid then
 			return seat:FindFirstAncestorOfClass("Model")
@@ -405,29 +496,164 @@ local function getCurrentCar()
 	return nil
 end
 
-local function findBodyPart(car)
-	return car:FindFirstChild("Body", true)
-		or car:FindFirstChild("BodyPaint", true)
-		or car:FindFirstChild("Paint", true)
+local function findPartByName(car, name)
+	return car:FindFirstChild(name, true)
+end
+
+local function refreshDecalList()
+	for _, child in pairs(DecalList:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+
+	for i, data in ipairs(customDecals) do
+		local item = Instance.new("Frame")
+		item.Size = UDim2.new(1, 0, 0, 48)
+		item.BackgroundColor3 = Color3.fromRGB(32, 32, 40)
+		item.LayoutOrder = i
+		item.Parent = DecalList
+		createCorner(item, 7)
+
+		local partTxt = Instance.new("TextLabel")
+		partTxt.Size = UDim2.new(1, -42, 0, 16)
+		partTxt.Position = UDim2.new(0, 8, 0, 3)
+		partTxt.BackgroundTransparency = 1
+		partTxt.Text = data.partName
+		partTxt.TextColor3 = Color3.fromRGB(255, 200, 100)
+		partTxt.TextXAlignment = Enum.TextXAlignment.Left
+		partTxt.TextScaled = true
+		partTxt.Font = Enum.Font.GothamSemibold
+		partTxt.Parent = item
+
+		local faceTxt = Instance.new("TextLabel")
+		faceTxt.Size = UDim2.new(1, -42, 0, 14)
+		faceTxt.Position = UDim2.new(0, 8, 0, 18)
+		faceTxt.BackgroundTransparency = 1
+		faceTxt.Text = "Face: " .. data.face
+		faceTxt.TextColor3 = Color3.fromRGB(200, 200, 210)
+		faceTxt.TextXAlignment = Enum.TextXAlignment.Left
+		faceTxt.TextScaled = true
+		faceTxt.Font = Enum.Font.Gotham
+		faceTxt.Parent = item
+
+		local idTxt = Instance.new("TextLabel")
+		idTxt.Size = UDim2.new(1, -42, 0, 12)
+		idTxt.Position = UDim2.new(0, 8, 0, 32)
+		idTxt.BackgroundTransparency = 1
+		idTxt.Text = data.id
+		idTxt.TextColor3 = Color3.fromRGB(120, 120, 135)
+		idTxt.TextXAlignment = Enum.TextXAlignment.Left
+		idTxt.TextScaled = true
+		idTxt.Font = Enum.Font.Gotham
+		idTxt.Parent = item
+
+		local delBtn = Instance.new("TextButton")
+		delBtn.Size = UDim2.new(0, 28, 0, 28)
+		delBtn.Position = UDim2.new(1, -34, 0.5, -14)
+		delBtn.BackgroundColor3 = Color3.fromRGB(160, 35, 35)
+		delBtn.Text = "X"
+		delBtn.TextColor3 = Color3.new(1, 1, 1)
+		delBtn.TextScaled = true
+		delBtn.Font = Enum.Font.GothamBold
+		delBtn.Parent = item
+		createCorner(delBtn, 6)
+
+		delBtn.MouseButton1Click:Connect(function()
+			if data.instance and data.instance.Parent then
+				data.instance:Destroy()
+			end
+			table.remove(customDecals, i)
+			refreshDecalList()
+		end)
+	end
+end
+
+local function applyCustomDecal()
+	local car = getCurrentCar()
+	if not car then
+		warn("❌ Sente em um carro primeiro!")
+		return
+	end
+
+	local part = findPartByName(car, selectedPartName)
+	if not part or not part:IsA("BasePart") then
+		warn("❌ Parte '" .. selectedPartName .. "' não encontrada no carro")
+		return
+	end
+
+	local raw = tostring(IdBox.Text):gsub("%s+", "")
+	if raw == "" then
+		warn("❌ Digite um ID válido")
+		return
+	end
+
+	local id = raw
+	if not id:find("rbxassetid://") then
+		id = "rbxassetid://" .. id
+	end
+
+	-- remove existing on same part + face
+	for i = #customDecals, 1, -1 do
+		if customDecals[i].partName == selectedPartName and customDecals[i].face == selectedFace then
+			if customDecals[i].instance and customDecals[i].instance.Parent then
+				customDecals[i].instance:Destroy()
+			end
+			table.remove(customDecals, i)
+		end
+	end
+
+	-- also clear leftover decal on that face of the part
+	for _, child in ipairs(part:GetChildren()) do
+		if child:IsA("Decal") and child.Face == Enum.NormalId[selectedFace] then
+			child:Destroy()
+		end
+	end
+
+	local decal = Instance.new("Decal")
+	decal.Texture = id
+	decal.Face = Enum.NormalId[selectedFace]
+	decal.Parent = part
+
+	table.insert(customDecals, {
+		partName = selectedPartName,
+		face = selectedFace,
+		id = id,
+		instance = decal
+	})
+
+	IdBox.Text = ""
+	refreshDecalList()
+end
+
+local function clearAllDecals()
+	local car = getCurrentCar()
+	if car then
+		for _, part in ipairs(car:GetDescendants()) do
+			if part:IsA("BasePart") then
+				for _, child in ipairs(part:GetChildren()) do
+					if child:IsA("Decal") then
+						child:Destroy()
+					end
+				end
+			end
+		end
+	end
+	customDecals = {}
+	refreshDecalList()
 end
 
 local function applyLivery(car, livery)
 	if not car then return false end
 
-	-- remove old decals
 	for _, part in ipairs(car:GetDescendants()) do
 		if part:IsA("BasePart") then
 			for _, child in ipairs(part:GetChildren()) do
-				if child:IsA("Decal") then
-					child:Destroy()
-				end
+				if child:IsA("Decal") then child:Destroy() end
 			end
 		end
 	end
 
-	-- apply new decals
 	for partName, faceTable in pairs(livery.Decals or {}) do
-		local part = car:FindFirstChild(partName, true) or findBodyPart(car)
+		local part = car:FindFirstChild(partName, true)
 		if part and part:IsA("BasePart") then
 			for face, tex in pairs(faceTable) do
 				if type(tex) == "string" and tex ~= "" then
@@ -440,95 +666,31 @@ local function applyLivery(car, livery)
 		end
 	end
 
-	-- apply colors
 	for partName, color in pairs(livery.Colors or {}) do
-		local part = car:FindFirstChild(partName, true) or findBodyPart(car)
+		local part = car:FindFirstChild(partName, true)
 		if part and part:IsA("BasePart") then
 			part.Color = color
 		end
 	end
 
+	customDecals = {}
+	refreshDecalList()
 	return true
 end
 
-local function applyCustomDecal(face, textureId)
-	local car = getCurrentCar()
-	if not car then
-		StatusLabel.Text = "❌ Sit in a car first!"
-		StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-		return
-	end
-
-	local part = findBodyPart(car)
-	if not part then
-		StatusLabel.Text = "❌ No Body part found"
-		StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-		return
-	end
-
-	-- clean the id
-	local id = tostring(textureId):gsub("%s+", "")
-	if id == "" then
-		StatusLabel.Text = "❌ Enter a valid ID"
-		StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-		return
-	end
-	if not id:find("rbxassetid://") then
-		id = "rbxassetid://" .. id
-	end
-
-	-- remove existing decal on that face
-	for _, child in ipairs(part:GetChildren()) do
-		if child:IsA("Decal") and child.Face == Enum.NormalId[face] then
-			child:Destroy()
-		end
-	end
-
-	local decal = Instance.new("Decal")
-	decal.Texture = id
-	decal.Face = Enum.NormalId[face]
-	decal.Parent = part
-
-	StatusLabel.Text = "✅ Applied to " .. face
-	StatusLabel.TextColor3 = Color3.fromRGB(100, 220, 120)
-end
-
-local function clearAllDecals()
-	local car = getCurrentCar()
-	if not car then
-		StatusLabel.Text = "❌ Sit in a car first!"
-		StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-		return
-	end
-
-	for _, part in ipairs(car:GetDescendants()) do
-		if part:IsA("BasePart") then
-			for _, child in ipairs(part:GetChildren()) do
-				if child:IsA("Decal") then
-					child:Destroy()
-				end
-			end
-		end
-	end
-
-	StatusLabel.Text = "✅ All decals cleared"
-	StatusLabel.TextColor3 = Color3.fromRGB(100, 220, 120)
-end
-
--- ==================== POPULATE LIVERIES ====================
+-- Populate cars
 for _, carName in ipairs(LiveryData.CarOrder) do
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, 0, 0, 44)
-	btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+	btn.Size = UDim2.new(1, 0, 0, 36)
+	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 	btn.Text = carName
 	btn.TextColor3 = Color3.fromRGB(230, 230, 240)
 	btn.TextScaled = true
 	btn.Font = Enum.Font.GothamSemibold
 	btn.Parent = CarList
-	createCorner(btn, 8)
+	createCorner(btn, 7)
 
 	btn.MouseButton1Click:Connect(function()
-		-- clear previous livery buttons
 		for _, v in pairs(LiveryList:GetChildren()) do
 			if v:IsA("TextButton") then v:Destroy() end
 		end
@@ -536,37 +698,33 @@ for _, carName in ipairs(LiveryData.CarOrder) do
 		local liveries = LiveryData[carName] or {}
 		for _, livery in ipairs(liveries) do
 			local lBtn = Instance.new("TextButton")
-			lBtn.Size = UDim2.new(1, 0, 0, 40)
-			lBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
+			lBtn.Size = UDim2.new(1, 0, 0, 34)
+			lBtn.BackgroundColor3 = Color3.fromRGB(48, 48, 58)
 			lBtn.Text = livery.Name
 			lBtn.TextColor3 = Color3.fromRGB(230, 230, 240)
 			lBtn.TextScaled = true
 			lBtn.Font = Enum.Font.Gotham
 			lBtn.Parent = LiveryList
-			createCorner(lBtn, 8)
+			createCorner(lBtn, 7)
 
 			lBtn.MouseButton1Click:Connect(function()
 				local car = getCurrentCar()
 				if car then
-					if applyLivery(car, livery) then
-						print("✅ Livery applied:", livery.Name)
-					else
-						warn("❌ Failed to apply")
-					end
+					applyLivery(car, livery)
 				else
-					warn("❌ You need to be sitting in a car!")
+					warn("❌ Você precisa estar sentado em um carro!")
 				end
 			end)
 		end
 	end)
 end
 
--- ==================== TAB SWITCHING ====================
+-- Tabs
 local function setTab(isLiveries)
-	TabLiveries.BackgroundColor3 = isLiveries and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(35, 35, 42)
-	TabLiveries.TextColor3 = isLiveries and Color3.new(1,1,1) or Color3.fromRGB(180, 180, 190)
-	TabCustom.BackgroundColor3 = (not isLiveries) and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(35, 35, 42)
-	TabCustom.TextColor3 = (not isLiveries) and Color3.new(1,1,1) or Color3.fromRGB(180, 180, 190)
+	TabLiveries.BackgroundColor3 = isLiveries and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(32, 32, 40)
+	TabLiveries.TextColor3 = isLiveries and Color3.new(1,1,1) or Color3.fromRGB(160, 160, 175)
+	TabCustom.BackgroundColor3 = (not isLiveries) and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(32, 32, 40)
+	TabCustom.TextColor3 = (not isLiveries) and Color3.new(1,1,1) or Color3.fromRGB(160, 160, 175)
 
 	LiveriesFrame.Visible = isLiveries
 	CustomFrame.Visible = not isLiveries
@@ -576,25 +734,17 @@ TabLiveries.MouseButton1Click:Connect(function() setTab(true) end)
 TabCustom.MouseButton1Click:Connect(function() setTab(false) end)
 setTab(true)
 
--- ==================== BUTTON CONNECTIONS ====================
-ApplyCustomBtn.MouseButton1Click:Connect(function()
-	applyCustomDecal(selectedFace, IdBox.Text)
-end)
-
+-- Buttons
+ApplyCustomBtn.MouseButton1Click:Connect(applyCustomDecal)
 ClearBtn.MouseButton1Click:Connect(clearAllDecals)
 
--- ==================== TOGGLE LOGIC ====================
+-- Toggle
 local function togglePanel()
 	MainFrame.Visible = not MainFrame.Visible
-	if MainFrame.Visible then
-		tween(MainFrame, {BackgroundTransparency = 0}, 0.2)
-	end
 end
 
 ToggleBall.MouseButton1Click:Connect(togglePanel)
-CloseBtn.MouseButton1Click:Connect(function()
-	MainFrame.Visible = false
-end)
+CloseBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false end)
 
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
@@ -603,4 +753,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
 	end
 end)
 
-print("🎉 Livery GUI Pro loaded!  •  Right Shift or the ⚡ ball to open")
+print("🎉 Livery GUI Pro loaded!  •  Right Shift or ⚡ ball")
