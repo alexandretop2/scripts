@@ -644,16 +644,34 @@ end
 local function applyLivery(car, livery)
 	if not car then return false end
 
+	-- limpa todos os decals do carro
 	for _, part in ipairs(car:GetDescendants()) do
 		if part:IsA("BasePart") then
 			for _, child in ipairs(part:GetChildren()) do
-				if child:IsA("Decal") then child:Destroy() end
+				if child:IsA("Decal") then
+					child:Destroy()
+				end
 			end
 		end
 	end
 
+	-- nomes que o script tenta quando o nome original não existe
+	local fallbackNames = {"Body", "Paint", "Paint1", "Paint2", "Paint3", "Paint4", "BodyPaint", "Body2", "Chassis"}
+
+	-- aplica decals
 	for partName, faceTable in pairs(livery.Decals or {}) do
 		local part = car:FindFirstChild(partName, true)
+
+		-- se não achou o nome original, tenta os fallbacks
+		if not part then
+			for _, name in ipairs(fallbackNames) do
+				part = car:FindFirstChild(name, true)
+				if part and part:IsA("BasePart") then
+					break
+				end
+			end
+		end
+
 		if part and part:IsA("BasePart") then
 			for face, tex in pairs(faceTable) do
 				if type(tex) == "string" and tex ~= "" then
@@ -663,11 +681,24 @@ local function applyLivery(car, livery)
 					decal.Parent = part
 				end
 			end
+		else
+			warn("❌ Não encontrou nenhuma peça de paint para:", partName)
 		end
 	end
 
+	-- aplica cores
 	for partName, color in pairs(livery.Colors or {}) do
 		local part = car:FindFirstChild(partName, true)
+
+		if not part then
+			for _, name in ipairs(fallbackNames) do
+				part = car:FindFirstChild(name, true)
+				if part and part:IsA("BasePart") then
+					break
+				end
+			end
+		end
+
 		if part and part:IsA("BasePart") then
 			part.Color = color
 		end
