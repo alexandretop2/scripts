@@ -1,6 +1,12 @@
 -- Script gerado pelo Map Exporter
 -- Reconstrói uma cópia das partes exportadas
 
+-- Deleta a pasta de barreiras invisíveis do mapa original, se existir
+local invisibleWalls = workspace:FindFirstChild("InvisibleCollisionWalls")
+if invisibleWalls then
+	invisibleWalls:Destroy()
+end
+
 local folder = workspace:FindFirstChild("RebuiltMap")
 
 if folder then
@@ -104,7 +110,7 @@ local function build(data)
 
 		part.Parent = folder
 		
-		-- Atribui o grupo diretamente pelo ID 5
+		-- Atribui o grupo diretamente pelo ID 5 (MainObject)
 		part.CollisionGroupId = 5
 	end
 end
