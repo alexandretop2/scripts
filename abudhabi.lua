@@ -92,6 +92,11 @@ local function build(data)
 		part.Reflectance = math.clamp(tonumber(d[9]) or 0, 0, 1)
 		part.CastShadow = d[10] == true
 		part.Anchored = true
+		
+		-- Adiciona o Collision Group em todas as partes
+		pcall(function()
+			part.CollisionGroup = "MainObject"
+		end)
 
 		-- Shape só existe diretamente em Part.
 		if part:IsA("Part") then
