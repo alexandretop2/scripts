@@ -948,7 +948,9 @@ closeBtn.MouseButton1Click:Connect(function()
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if isBindingKey and input.UserInputType == Enum.UserInputType.Keyboard then
+    if isBindingKey and (input.UserInputType == Enum.UserInputType.Keyboard 
+        or input.UserInputType == Enum.UserInputType.Gamepad1
+        or input.UserInputType == Enum.UserInputType.Gamepad2) then
         if bindingType == "nitro" then
             nitroKey = input.KeyCode
             bindNitroBtn.Text = "⌨️  Definir Tecla do Nitro  [" .. nitroKey.Name .. "]"
