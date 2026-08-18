@@ -1,7 +1,7 @@
 --[[
-    ⚡ CONTROL HUB - Rayfield Edition (v3)
+    ⚡ CONTROL HUB - Rayfield Edition (v4)
     Nitro | Pulo | Pneu | Gravidade | Configs | Ajustes
-    + Partículas NitroFire + cores hex + suporte a controle + configs salvas
+    Sistema de configs corrigido + ToggleUIKeybind J
 ]]
 
 local UserInputService = game:GetService("UserInputService")
@@ -11,7 +11,6 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Limpa UI antiga se existir
 pcall(function()
     local old = playerGui:FindFirstChild("CustomControlHub")
     if old then old:Destroy() end
@@ -67,123 +66,11 @@ local ORIGINAL_GRAVITY = workspace.Gravity
 local currentGravity = workspace.Gravity
 local menuScale = 1
 
--- ─────────────────────────────────────────────
--- SISTEMA DE CONFIGS
--- ─────────────────────────────────────────────
+-- Config system
 local CONFIG_FOLDER = "ControlHub/Configs"
 local configs = {}
 local selectedConfigName = nil
-
-local function ensureFolder()
-    pcall(function()
-        if not isfolder("ControlHub") then makefolder("ControlHub") end
-        if not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
-    end)
-end
-
-local function getConfigPath(name)
-    return CONFIG_FOLDER .. "/" .. name .. ".json"
-end
-
-local function timeAgo(timestamp)
-    local diff = os.time() - (timestamp or os.time())
-    if diff < 60 then return "agora"
-    elseif diff < 3600 then return math.floor(diff / 60) .. " min atrás"
-    elseif diff < 86400 then return math.floor(diff / 3600) .. " h atrás"
-    else return math.floor(diff / 86400) .. " dias atrás"
-    end
-end
-
-local function loadAllConfigs()
-    configs = {}
-    ensureFolder()
-    local ok, files = pcall(function()
-        return listfiles(CONFIG_FOLDER)
-    end)
-    if not ok or not files then return end
-    for _, path in ipairs(files) do
-        local name = path:match("([^/\\]+)%.json$")
-        if name then
-            local success, content = pcall(readfile, path)
-            if success and content then
-                local decodeOk, data = pcall(function()
-                    return HttpService:JSONDecode(content)
-                end)
-                if decodeOk and data then
-                    configs[name] = data
-                end
-            end
-        end
-    end
-end
-
-local function saveConfigToFile(name, data)
-    ensureFolder()
-    local ok = pcall(function()
-        writefile(getConfigPath(name), HttpService:JSONEncode(data))
-    end)
-    return ok
-end
-
-local function deleteConfigFile(name)
-    pcall(function()
-        delfile(getConfigPath(name))
-    end)
-    configs[name] = nil
-end
-
-local function getCurrentSettings()
-    return {
-        name = "",
-        created = os.time(),
-        nitroForce = BOOST_FORCE,
-        jumpForce = JUMP_FORCE,
-        gravity = currentGravity,
-        nitroColor1 = nitroColor1Hex,
-        nitroColor2 = nitroColor2Hex,
-        nitroEnabled = nitroEnabled,
-        jumpEnabled = jumpEnabled,
-        nitroEffect = nitroEffectEnabled,
-        materialIndex = materialIndex,
-        menuScale = menuScale,
-        nitroKey = nitroKey.Name,
-        jumpKey = jumpKey.Name,
-        menuKey = menuKey.Name,
-    }
-end
-
-local function applyNitroColors()
-    local c1 = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0)
-    local c2 = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0)
-    local seq = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, c1),
-        ColorSequenceKeypoint.new(1, c2),
-    })
-    for _, pe in ipairs(getNitroParticles()) do
-        pe.Color = seq
-    end
-end
-
-local function applySettings(data)
-    if not data then return end
-    BOOST_FORCE = data.nitroForce or BOOST_FORCE
-    JUMP_FORCE = data.jumpForce or JUMP_FORCE
-    currentGravity = data.gravity or currentGravity
-    workspace.Gravity = currentGravity
-    nitroColor1Hex = data.nitroColor1 or nitroColor1Hex
-    nitroColor2Hex = data.nitroColor2 or nitroColor2Hex
-    nitroEnabled = data.nitroEnabled ~= false
-    jumpEnabled = data.jumpEnabled ~= false
-    nitroEffectEnabled = data.nitroEffect ~= false
-    materialIndex = data.materialIndex or materialIndex
-    menuScale = data.menuScale or 1
-    pcall(function()
-        if data.nitroKey then nitroKey = Enum.KeyCode[data.nitroKey] or nitroKey end
-        if data.jumpKey then jumpKey = Enum.KeyCode[data.jumpKey] or jumpKey end
-        if data.menuKey then menuKey = Enum.KeyCode[data.menuKey] or menuKey end
-    end)
-    applyNitroColors()
-end
+local configNameText = ""  -- armazena o texto do input de nome
 
 -- ─────────────────────────────────────────────
 -- HELPERS
@@ -238,7 +125,7 @@ floatingGui.IgnoreGuiInset = true
 floatingGui.Parent = playerGui
 
 -- ─────────────────────────────────────────────
--- VEHICLE / PARTICLES
+-- VEHICLE / PARTICLES (ordem correta)
 -- ─────────────────────────────────────────────
 local function getVehicleRoot()
     local char = player.Character
@@ -285,6 +172,18 @@ local function getNitroParticles()
         end
     end
     return list
+end
+
+local function applyNitroColors()
+    local c1 = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0)
+    local c2 = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0)
+    local seq = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, c1),
+        ColorSequenceKeypoint.new(1, c2),
+    })
+    for _, pe in ipairs(getNitroParticles()) do
+        pe.Color = seq
+    end
 end
 
 local function setNitroParticlesEnabled(enabled)
@@ -439,6 +338,127 @@ local function createFloatingButton(name, text, color, callback, isHold)
 end
 
 -- ─────────────────────────────────────────────
+-- SISTEMA DE CONFIGS (corrigido)
+-- ─────────────────────────────────────────────
+local function ensureFolder()
+    pcall(function()
+        if isfolder and not isfolder("ControlHub") then makefolder("ControlHub") end
+        if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
+    end)
+end
+
+local function getConfigPath(name)
+    return CONFIG_FOLDER .. "/" .. name .. ".json"
+end
+
+local function timeAgo(timestamp)
+    local diff = os.time() - (tonumber(timestamp) or os.time())
+    if diff < 60 then return "agora"
+    elseif diff < 3600 then return math.floor(diff / 60) .. " min atrás"
+    elseif diff < 86400 then return math.floor(diff / 3600) .. " h atrás"
+    else return math.floor(diff / 86400) .. " dias atrás"
+    end
+end
+
+local function loadAllConfigs()
+    configs = {}
+    ensureFolder()
+    local ok, files = pcall(function()
+        if listfiles then return listfiles(CONFIG_FOLDER) end
+        return {}
+    end)
+    if not ok or type(files) ~= "table" then return end
+    for _, path in ipairs(files) do
+        local name = tostring(path):match("([^/\\]+)%.json$")
+        if name then
+            local success, content = pcall(function()
+                return readfile(path)
+            end)
+            if success and content and content ~= "" then
+                local decodeOk, data = pcall(function()
+                    return HttpService:JSONDecode(content)
+                end)
+                if decodeOk and type(data) == "table" then
+                    configs[name] = data
+                end
+            end
+        end
+    end
+end
+
+local function saveConfigToFile(name, data)
+    ensureFolder()
+    local ok, err = pcall(function()
+        writefile(getConfigPath(name), HttpService:JSONEncode(data))
+    end)
+    return ok, err
+end
+
+local function deleteConfigFile(name)
+    pcall(function()
+        if delfile then delfile(getConfigPath(name)) end
+    end)
+    configs[name] = nil
+end
+
+local function getCurrentSettings()
+    return {
+        name = "",
+        created = os.time(),
+        nitroForce = BOOST_FORCE,
+        jumpForce = JUMP_FORCE,
+        gravity = currentGravity,
+        nitroColor1 = nitroColor1Hex,
+        nitroColor2 = nitroColor2Hex,
+        nitroEnabled = nitroEnabled,
+        jumpEnabled = jumpEnabled,
+        nitroEffect = nitroEffectEnabled,
+        materialIndex = materialIndex,
+        menuScale = menuScale,
+        nitroKey = nitroKey.Name,
+        jumpKey = jumpKey.Name,
+        menuKey = menuKey.Name,
+    }
+end
+
+local function applySettings(data)
+    if type(data) ~= "table" then return false end
+    BOOST_FORCE = tonumber(data.nitroForce) or BOOST_FORCE
+    JUMP_FORCE = tonumber(data.jumpForce) or JUMP_FORCE
+    currentGravity = tonumber(data.gravity) or currentGravity
+    workspace.Gravity = currentGravity
+    nitroColor1Hex = data.nitroColor1 or nitroColor1Hex
+    nitroColor2Hex = data.nitroColor2 or nitroColor2Hex
+    nitroEnabled = data.nitroEnabled ~= false
+    jumpEnabled = data.jumpEnabled ~= false
+    nitroEffectEnabled = data.nitroEffect ~= false
+    materialIndex = tonumber(data.materialIndex) or materialIndex
+    menuScale = tonumber(data.menuScale) or 1
+    pcall(function()
+        if data.nitroKey and Enum.KeyCode[data.nitroKey] then
+            nitroKey = Enum.KeyCode[data.nitroKey]
+        end
+        if data.jumpKey and Enum.KeyCode[data.jumpKey] then
+            jumpKey = Enum.KeyCode[data.jumpKey]
+        end
+        if data.menuKey and Enum.KeyCode[data.menuKey] then
+            menuKey = Enum.KeyCode[data.menuKey]
+        end
+    end)
+    applyNitroColors()
+    return true
+end
+
+local function getConfigNames()
+    local names = {}
+    for name in pairs(configs) do
+        table.insert(names, name)
+    end
+    table.sort(names)
+    return names
+end
+
+-- ─────────────────────────────────────────────
 -- RAYFIELD UI
 -- ─────────────────────────────────────────────
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -464,51 +484,63 @@ local Window = Rayfield:CreateWindow({
 
 local nitroKeyBtn, jumpKeyBtn, menuKeyBtn
 local configDropdown, configInfoLabel
-local configNameInput
-
-local function refreshConfigList()
-    loadAllConfigs()
-    local names = {}
-    for name in pairs(configs) do
-        table.insert(names, name)
-    end
-    table.sort(names)
-    if #names == 0 then names = {"(nenhuma config)"} end
-    if configDropdown then
-        pcall(function()
-            configDropdown:Refresh(names)
-        end)
-    end
-    return names
-end
 
 local function updateConfigInfo(name)
     if not configInfoLabel then return end
-    local data = configs[name]
+    local data = name and configs[name]
     if not data then
         pcall(function()
             configInfoLabel:Set({
                 Title = "Nenhuma config selecionada",
-                Content = "Salve ou selecione uma config"
+                Content = "Salve ou selecione uma config na lista"
             })
         end)
         return
     end
     local text = string.format(
-        "Criada: %s\nNitro: %s\nPulo: %s\nGravidade: %s\nCores: %s / %s",
+        "Criada: %s\nNitro: %s\nPulo: %s\nGravidade: %s\nCores: %s / %s\nTeclas: %s | %s",
         timeAgo(data.created),
         tostring(data.nitroForce or "?"),
         tostring(data.jumpForce or "?"),
         tostring(data.gravity or "?"),
-        data.nitroColor1 or "?",
-        data.nitroColor2 or "?"
+        tostring(data.nitroColor1 or "?"),
+        tostring(data.nitroColor2 or "?"),
+        tostring(data.nitroKey or "?"),
+        tostring(data.jumpKey or "?")
     )
     pcall(function()
         configInfoLabel:Set({
-            Title = name,
+            Title = tostring(name),
             Content = text
         })
     end)
+end
+
+local function refreshConfigList(preferName)
+    loadAllConfigs()
+    local names = getConfigNames()
+    if #names == 0 then
+        names = {"(nenhuma config)"}
+        selectedConfigName = nil
+    else
+        if preferName and configs[preferName] then
+            selectedConfigName = preferName
+        elseif selectedConfigName and configs[selectedConfigName] then
+            -- mantém a seleção atual
+        else
+            selectedConfigName = names[1]
+        end
+    end
+    if configDropdown then
+        pcall(function()
+            configDropdown:Refresh(names)
+            if selectedConfigName and configs[selectedConfigName] then
+                configDropdown:Set({selectedConfigName})
+            end
+        end)
+    end
+    updateConfigInfo(selectedConfigName)
+    return names
 end
 
 -- ==================== TAB NITRO ====================
@@ -702,7 +734,7 @@ PneuTab:CreateDropdown({
    MultipleOptions = false,
    Flag = "WheelMaterial",
    Callback = function(Option)
-      local selected = type(Option) == "table" and Option[1] or Option
+      local selected = type(Option) == "table" and (Option[1] or Option.Name) or Option
       for i, mat in ipairs(MATERIALS) do
          if mat.Name == selected then
             materialIndex = i
@@ -773,41 +805,47 @@ GravityTab:CreateParagraph({
    Content = "Gravidade original do jogo: " .. tostring(ORIGINAL_GRAVITY) .. "\nMínimo: 0 | Máximo: 500"
 })
 
--- ==================== TAB CONFIGS ====================
+-- ==================== TAB CONFIGS (CORRIGIDA) ====================
 local ConfigsTab = Window:CreateTab("💾 Configs", 4483362458)
 
 ConfigsTab:CreateSection("Salvar Nova Config")
 
-configNameInput = ConfigsTab:CreateInput({
+ConfigsTab:CreateInput({
    Name = "Nome da Config",
    CurrentValue = "",
    PlaceholderText = "Ex: MinhaSetup",
    RemoveTextAfterFocusLost = false,
    Flag = "ConfigNameInput",
-   Callback = function(Text) end,
+   Callback = function(Text)
+      configNameText = tostring(Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+   end,
 })
 
 ConfigsTab:CreateButton({
    Name = "💾 Salvar Config Atual",
    Callback = function()
-      local name = ""
-      pcall(function() name = tostring(configNameInput.CurrentValue or "") end)
-      name = name:gsub("%s+", "")
+      local name = configNameText
       if name == "" or name == "(nenhuma config)" then
-         Rayfield:Notify({ Title = "Erro", Content = "Digite um nome válido para a config", Duration = 3 })
+         Rayfield:Notify({ Title = "Erro", Content = "Digite um nome válido no campo acima", Duration = 3 })
+         return
+      end
+      -- remove caracteres problemáticos
+      name = name:gsub("[/\\:*?\"<>|]", "")
+      if name == "" then
+         Rayfield:Notify({ Title = "Erro", Content = "Nome inválido", Duration = 3 })
          return
       end
       local data = getCurrentSettings()
       data.name = name
       data.created = os.time()
-      if saveConfigToFile(name, data) then
+      local ok, err = saveConfigToFile(name, data)
+      if ok then
          configs[name] = data
          selectedConfigName = name
-         refreshConfigList()
-         updateConfigInfo(name)
-         Rayfield:Notify({ Title = "Config", Content = "Salva: " .. name, Duration = 3 })
+         refreshConfigList(name)
+         Rayfield:Notify({ Title = "Config salva", Content = "Nome: " .. name, Duration = 3 })
       else
-         Rayfield:Notify({ Title = "Erro", Content = "Não foi possível salvar (executor sem writefile?)", Duration = 4 })
+         Rayfield:Notify({ Title = "Erro ao salvar", Content = "Seu executor precisa de writefile. " .. tostring(err or ""), Duration = 5 })
       end
    end,
 })
@@ -815,10 +853,12 @@ ConfigsTab:CreateButton({
 ConfigsTab:CreateSection("Configs Salvas")
 
 loadAllConfigs()
-local initialNames = {}
-for name in pairs(configs) do table.insert(initialNames, name) end
-table.sort(initialNames)
-if #initialNames == 0 then initialNames = {"(nenhuma config)"} end
+local initialNames = getConfigNames()
+if #initialNames == 0 then
+    initialNames = {"(nenhuma config)"}
+else
+    selectedConfigName = initialNames[1]
+end
 
 configDropdown = ConfigsTab:CreateDropdown({
    Name = "Selecionar Config",
@@ -827,11 +867,17 @@ configDropdown = ConfigsTab:CreateDropdown({
    MultipleOptions = false,
    Flag = "SelectedConfig",
    Callback = function(Option)
-      local name = type(Option) == "table" and Option[1] or Option
-      if name and name ~= "(nenhuma config)" then
+      local name
+      if type(Option) == "table" then
+         name = Option[1] or Option.Name or Option.Value
+      else
+         name = Option
+      end
+      name = tostring(name or "")
+      if name ~= "" and name ~= "(nenhuma config)" and configs[name] then
          selectedConfigName = name
          updateConfigInfo(name)
-      else
+      elseif name == "(nenhuma config)" then
          selectedConfigName = nil
          updateConfigInfo(nil)
       end
@@ -839,40 +885,67 @@ configDropdown = ConfigsTab:CreateDropdown({
 })
 
 configInfoLabel = ConfigsTab:CreateParagraph({
-   Title = "Nenhuma config selecionada",
-   Content = "Salve ou selecione uma config"
+   Title = selectedConfigName or "Nenhuma config selecionada",
+   Content = selectedConfigName and "Carregando info..." or "Salve ou selecione uma config na lista"
 })
+
+-- atualiza info inicial
+task.defer(function()
+    updateConfigInfo(selectedConfigName)
+end)
 
 ConfigsTab:CreateSection("Ações")
 
 ConfigsTab:CreateButton({
    Name = "📂 Carregar Config",
    Callback = function()
+      -- se selectedConfigName estiver nil, tenta pegar a primeira da lista
       if not selectedConfigName or not configs[selectedConfigName] then
-         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config válida", Duration = 3 })
+         local names = getConfigNames()
+         if #names > 0 then
+            selectedConfigName = names[1]
+         end
+      end
+      if not selectedConfigName or not configs[selectedConfigName] then
+         Rayfield:Notify({ Title = "Erro", Content = "Nenhuma config disponível. Salve uma primeiro.", Duration = 3 })
          return
       end
-      applySettings(configs[selectedConfigName])
-      Rayfield:Notify({ Title = "Config", Content = "Carregada: " .. selectedConfigName, Duration = 3 })
+      local ok = applySettings(configs[selectedConfigName])
+      if ok then
+         -- atualiza textos das teclas
+         pcall(function()
+            if nitroKeyBtn then nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end
+            if jumpKeyBtn then jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end
+            if menuKeyBtn then menuKeyBtn:Set("⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]") end
+         end)
+         Rayfield:Notify({
+            Title = "Config carregada",
+            Content = selectedConfigName .. " | Nitro: " .. BOOST_FORCE .. " | Pulo: " .. JUMP_FORCE .. " | Grav: " .. currentGravity,
+            Duration = 4
+         })
+      else
+         Rayfield:Notify({ Title = "Erro", Content = "Falha ao aplicar a config", Duration = 3 })
+      end
    end,
 })
 
 ConfigsTab:CreateButton({
    Name = "🔄 Substituir pela Atual",
    Callback = function()
-      if not selectedConfigName or selectedConfigName == "(nenhuma config)" then
-         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config para substituir", Duration = 3 })
+      if not selectedConfigName or selectedConfigName == "(nenhuma config)" or not configs[selectedConfigName] then
+         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config válida na lista", Duration = 3 })
          return
       end
       local data = getCurrentSettings()
       data.name = selectedConfigName
-      data.created = configs[selectedConfigName] and configs[selectedConfigName].created or os.time()
-      if saveConfigToFile(selectedConfigName, data) then
+      data.created = configs[selectedConfigName].created or os.time()
+      local ok = saveConfigToFile(selectedConfigName, data)
+      if ok then
          configs[selectedConfigName] = data
          updateConfigInfo(selectedConfigName)
          Rayfield:Notify({ Title = "Config", Content = "Substituída: " .. selectedConfigName, Duration = 3 })
       else
-         Rayfield:Notify({ Title = "Erro", Content = "Falha ao substituir", Duration = 3 })
+         Rayfield:Notify({ Title = "Erro", Content = "Falha ao substituir (writefile?)", Duration = 3 })
       end
    end,
 })
@@ -884,21 +957,19 @@ ConfigsTab:CreateButton({
          Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config para renomear", Duration = 3 })
          return
       end
-      local newName = ""
-      pcall(function() newName = tostring(configNameInput.CurrentValue or "") end)
-      newName = newName:gsub("%s+", "")
+      local newName = configNameText:gsub("[/\\:*?\"<>|]", "")
       if newName == "" or newName == selectedConfigName then
-         Rayfield:Notify({ Title = "Erro", Content = "Digite um nome novo no campo acima", Duration = 3 })
+         Rayfield:Notify({ Title = "Erro", Content = "Digite um nome NOVO no campo de nome acima", Duration = 3 })
          return
       end
       local data = configs[selectedConfigName]
       data.name = newName
-      if saveConfigToFile(newName, data) then
+      local ok = saveConfigToFile(newName, data)
+      if ok then
          deleteConfigFile(selectedConfigName)
          configs[newName] = data
          selectedConfigName = newName
-         refreshConfigList()
-         updateConfigInfo(newName)
+         refreshConfigList(newName)
          Rayfield:Notify({ Title = "Config", Content = "Renomeada para: " .. newName, Duration = 3 })
       else
          Rayfield:Notify({ Title = "Erro", Content = "Falha ao renomear", Duration = 3 })
@@ -917,7 +988,6 @@ ConfigsTab:CreateButton({
       deleteConfigFile(name)
       selectedConfigName = nil
       refreshConfigList()
-      updateConfigInfo(nil)
       Rayfield:Notify({ Title = "Config", Content = "Apagada: " .. name, Duration = 3 })
    end,
 })
@@ -926,18 +996,20 @@ ConfigsTab:CreateButton({
    Name = "🔄 Atualizar Lista",
    Callback = function()
       refreshConfigList()
-      Rayfield:Notify({ Title = "Configs", Content = "Lista atualizada", Duration = 2 })
+      local n = 0
+      for _ in pairs(configs) do n = n + 1 end
+      Rayfield:Notify({ Title = "Configs", Content = "Lista atualizada (" .. n .. " config(s))", Duration = 2 })
    end,
 })
 
 -- ==================== TAB AJUSTES ====================
 local SettingsTab = Window:CreateTab("⚙️ Ajustes", 4483362458)
 
-SettingsTab:CreateSection("Tecla do Menu (Rayfield)")
+SettingsTab:CreateSection("Tecla do Menu")
 
 SettingsTab:CreateParagraph({
    Title = "ToggleUIKeybind",
-   Content = "A tecla padrão para abrir/fechar o menu é: J\n(definida no ToggleUIKeybind do Rayfield)"
+   Content = "Tecla padrão para abrir/fechar o menu: J\n(nativo do Rayfield)"
 })
 
 menuKeyBtn = SettingsTab:CreateButton({
@@ -961,16 +1033,15 @@ SettingsTab:CreateSlider({
    Callback = function(Value)
       menuScale = Value
       pcall(function()
-         local main = nil
          for _, gui in ipairs({game:GetService("CoreGui"), playerGui}) do
             local rf = gui:FindFirstChild("Rayfield") or gui:FindFirstChild("RayfieldLibrary")
             if rf then
-               main = rf:FindFirstChild("Main", true)
-               if main then break end
+               local main = rf:FindFirstChild("Main", true)
+               if main and main:IsA("GuiObject") then
+                  main.Size = UDim2.new(0, math.floor(500 * Value), 0, math.floor(350 * Value))
+                  break
+               end
             end
-         end
-         if main and main:IsA("GuiObject") then
-            main.Size = UDim2.new(0, math.floor(500 * Value), 0, math.floor(350 * Value))
          end
       end)
    end,
@@ -978,11 +1049,11 @@ SettingsTab:CreateSlider({
 
 SettingsTab:CreateParagraph({
    Title = "Informações",
-   Content = "• Nitro: força + partículas NitroFire\n• Cores: use o seletor de cor (preview)\n• Pneu: FR/FL/RR/RL → Wheel\n• Tecla padrão do menu: J\n• Suporte a teclado + controle\n• Configs são salvas na pasta ControlHub/Configs"
+   Content = "• Nitro: força + partículas NitroFire\n• Cores: seletor visual\n• Pneu: FR/FL/RR/RL → Wheel\n• Menu: tecla J\n• Configs: pasta ControlHub/Configs\n• Precisa de writefile/readfile no executor"
 })
 
 -- ─────────────────────────────────────────────
--- INPUT CONNECTIONS
+-- INPUT
 -- ─────────────────────────────────────────────
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if isBindingKey and (input.UserInputType == Enum.UserInputType.Keyboard
@@ -1031,12 +1102,12 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 task.spawn(function()
-    task.wait(0.5)
+    task.wait(0.8)
     refreshConfigList()
 end)
 
 Rayfield:Notify({
-   Title = "Control Hub",
-   Content = "Carregado com sucesso! ⚡  |  Tecla do menu: J",
+   Title = "Xandão",
+   Content = "Carregado! Tecla do menu: J",
    Duration = 4
 })
