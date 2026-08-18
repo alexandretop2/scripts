@@ -433,6 +433,7 @@ local function applySettings(data)
     jumpEnabled = data.jumpEnabled ~= false
     nitroEffectEnabled = data.nitroEffect ~= false
     materialIndex = tonumber(data.materialIndex) or materialIndex
+    if materialIndex < 1 or materialIndex > #MATERIALS then materialIndex = 1 end
     menuScale = tonumber(data.menuScale) or 1
     pcall(function()
         if data.nitroKey and Enum.KeyCode[data.nitroKey] then
@@ -446,6 +447,46 @@ local function applySettings(data)
         end
     end)
     applyNitroColors()
+
+    -- Atualiza os elementos visuais do Rayfield
+    pcall(function()
+        if ui.nitroToggle then ui.nitroToggle:Set(nitroEnabled) end
+        if ui.nitroEffectToggle then ui.nitroEffectToggle:Set(nitroEffectEnabled) end
+        if ui.nitroForceInput then ui.nitroForceInput:Set(tostring(BOOST_FORCE)) end
+        if ui.nitroColor1 then
+            local c = hexToColor3(nitroColor1Hex)
+            if c then ui.nitroColor1:Set(c) end
+        end
+        if ui.nitroColor2 then
+            local c = hexToColor3(nitroColor2Hex)
+            if c then ui.nitroColor2:Set(c) end
+        end
+        if ui.jumpToggle then ui.jumpToggle:Set(jumpEnabled) end
+        if ui.jumpForceInput then ui.jumpForceInput:Set(tostring(JUMP_FORCE)) end
+        if ui.materialDropdown then
+            ui.materialDropdown:Set({MATERIALS[materialIndex].Name})
+        end
+        if ui.gravitySlider then ui.gravitySlider:Set(currentGravity) end
+        if ui.menuScaleSlider then ui.menuScaleSlider:Set(menuScale) end
+        if nitroKeyBtn then nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end
+        if jumpKeyBtn then jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end
+        if menuKeyBtn then menuKeyBtn:Set("⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]") end
+    end)
+
+    -- aplica escala do menu
+    pcall(function()
+        for _, gui in ipairs({game:GetService("CoreGui"), playerGui}) do
+            local rf = gui:FindFirstChild("Rayfield") or gui:FindFirstChild("RayfieldLibrary")
+            if rf then
+                local main = rf:FindFirstChild("Main", true)
+                if main and main:IsA("GuiObject") then
+                    main.Size = UDim2.new(0, math.floor(500 * menuScale), 0, math.floor(350 * menuScale))
+                    break
+                end
+            end
+        end
+    end)
+
     return true
 end
 
@@ -484,6 +525,20 @@ local Window = Rayfield:CreateWindow({
 
 local nitroKeyBtn, jumpKeyBtn, menuKeyBtn
 local configDropdown, configInfoLabel
+
+-- Referências dos elementos para atualizar ao carregar config
+local ui = {
+    nitroToggle = nil,
+    nitroEffectToggle = nil,
+    nitroForceInput = nil,
+    nitroColor1 = nil,
+    nitroColor2 = nil,
+    jumpToggle = nil,
+    jumpForceInput = nil,
+    materialDropdown = nil,
+    gravitySlider = nil,
+    menuScaleSlider = nil,
+}
 
 local function updateConfigInfo(name)
     if not configInfoLabel then return end
@@ -548,7 +603,7 @@ local NitroTab = Window:CreateTab("⚡ Nitro", 4483362458)
 
 NitroTab:CreateSection("Sistema")
 
-NitroTab:CreateToggle({
+ui.nitroToggle = NitroTab:CreateToggle({
    Name = "Ativar Sistema de Nitro",
    CurrentValue = true,
    Flag = "NitroSystem",
@@ -559,7 +614,7 @@ NitroTab:CreateToggle({
    end,
 })
 
-NitroTab:CreateToggle({
+ui.nitroEffectToggle = NitroTab:CreateToggle({
    Name = "Efeito de Partículas (NitroFire)",
    CurrentValue = true,
    Flag = "NitroEffect",
@@ -572,7 +627,7 @@ NitroTab:CreateToggle({
 
 NitroTab:CreateSection("Força do Nitro")
 
-NitroTab:CreateInput({
+ui.nitroForceInput = NitroTab:CreateInput({
    Name = "Força do Nitro (100 - 1M)",
    CurrentValue = tostring(BOOST_FORCE),
    PlaceholderText = "25000",
@@ -589,7 +644,7 @@ NitroTab:CreateInput({
 
 NitroTab:CreateSection("Cores das Partículas")
 
-NitroTab:CreateColorPicker({
+ui.nitroColor1 = NitroTab:CreateColorPicker({
    Name = "Cor Nitro 1 (preview)",
    Color = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0),
    Flag = "NitroColor1",
@@ -602,7 +657,7 @@ NitroTab:CreateColorPicker({
    end,
 })
 
-NitroTab:CreateColorPicker({
+ui.nitroColor2 = NitroTab:CreateColorPicker({
    Name = "Cor Nitro 2 (preview)",
    Color = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0),
    Flag = "NitroColor2",
@@ -656,7 +711,7 @@ local JumpTab = Window:CreateTab("🦘 Pulo", 4483362458)
 
 JumpTab:CreateSection("Sistema")
 
-JumpTab:CreateToggle({
+ui.jumpToggle = JumpTab:CreateToggle({
    Name = "Ativar Sistema de Pulo",
    CurrentValue = true,
    Flag = "JumpSystem",
@@ -668,7 +723,7 @@ JumpTab:CreateToggle({
 
 JumpTab:CreateSection("Poder do Pulo")
 
-JumpTab:CreateInput({
+ui.jumpForceInput = JumpTab:CreateInput({
    Name = "Poder do Pulo (0 - 5000)",
    CurrentValue = tostring(JUMP_FORCE),
    PlaceholderText = "2000",
@@ -727,7 +782,7 @@ for _, mat in ipairs(MATERIALS) do
    table.insert(materialOptions, mat.Name)
 end
 
-PneuTab:CreateDropdown({
+ui.materialDropdown = PneuTab:CreateDropdown({
    Name = "Escolher Material",
    Options = materialOptions,
    CurrentOption = {MATERIALS[materialIndex].Name},
@@ -778,7 +833,7 @@ local GravityTab = Window:CreateTab("🌍 Gravidade", 4483362458)
 
 GravityTab:CreateSection("Controle de Gravidade")
 
-GravityTab:CreateSlider({
+ui.gravitySlider = GravityTab:CreateSlider({
    Name = "Gravidade",
    Range = {0, 500},
    Increment = 1,
@@ -1023,7 +1078,7 @@ menuKeyBtn = SettingsTab:CreateButton({
 
 SettingsTab:CreateSection("Tamanho do Menu")
 
-SettingsTab:CreateSlider({
+ui.menuScaleSlider = SettingsTab:CreateSlider({
    Name = "Escala do Menu",
    Range = {0.5, 2},
    Increment = 0.05,
