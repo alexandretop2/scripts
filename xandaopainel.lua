@@ -1,11 +1,12 @@
 --[[
-    ⚡ CONTROL HUB - Rayfield Edition (v2)
-    Nitro | Pulo | Pneu | Gravidade | Ajustes
-    + Partículas NitroFire + cores hex + suporte a controle
+    ⚡ CONTROL HUB - Rayfield Edition (v3)
+    Nitro | Pulo | Pneu | Gravidade | Configs | Ajustes
+    + Partículas NitroFire + cores hex + suporte a controle + configs salvas
 ]]
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -33,9 +34,9 @@ local boostConn = nil
 local activeForce = nil
 local activeAtt = nil
 
-local nitroEnabled = true          -- sistema de nitro ligado/desligado
-local jumpEnabled = true           -- sistema de pulo ligado/desligado
-local nitroEffectEnabled = true    -- partículas NitroFire on/off
+local nitroEnabled = true
+local jumpEnabled = true
+local nitroEffectEnabled = true
 
 local nitroBtnExists = false
 local jumpBtnExists = false
@@ -60,12 +61,129 @@ local MATERIALS = {
     Enum.Material.Plaster, Enum.Material.Rubber, Enum.Material.RoofShingles,
 }
 local materialIndex = 1
-local originalWheelMaterials = {}  -- guarda material original das rodas
+local originalWheelMaterials = {}
 
 local ORIGINAL_GRAVITY = workspace.Gravity
 local currentGravity = workspace.Gravity
-
 local menuScale = 1
+
+-- ─────────────────────────────────────────────
+-- SISTEMA DE CONFIGS
+-- ─────────────────────────────────────────────
+local CONFIG_FOLDER = "ControlHub/Configs"
+local configs = {}
+local selectedConfigName = nil
+
+local function ensureFolder()
+    pcall(function()
+        if not isfolder("ControlHub") then makefolder("ControlHub") end
+        if not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
+    end)
+end
+
+local function getConfigPath(name)
+    return CONFIG_FOLDER .. "/" .. name .. ".json"
+end
+
+local function timeAgo(timestamp)
+    local diff = os.time() - (timestamp or os.time())
+    if diff < 60 then return "agora"
+    elseif diff < 3600 then return math.floor(diff / 60) .. " min atrás"
+    elseif diff < 86400 then return math.floor(diff / 3600) .. " h atrás"
+    else return math.floor(diff / 86400) .. " dias atrás"
+    end
+end
+
+local function loadAllConfigs()
+    configs = {}
+    ensureFolder()
+    local ok, files = pcall(function()
+        return listfiles(CONFIG_FOLDER)
+    end)
+    if not ok or not files then return end
+    for _, path in ipairs(files) do
+        local name = path:match("([^/\\]+)%.json$")
+        if name then
+            local success, content = pcall(readfile, path)
+            if success and content then
+                local decodeOk, data = pcall(function()
+                    return HttpService:JSONDecode(content)
+                end)
+                if decodeOk and data then
+                    configs[name] = data
+                end
+            end
+        end
+    end
+end
+
+local function saveConfigToFile(name, data)
+    ensureFolder()
+    local ok = pcall(function()
+        writefile(getConfigPath(name), HttpService:JSONEncode(data))
+    end)
+    return ok
+end
+
+local function deleteConfigFile(name)
+    pcall(function()
+        delfile(getConfigPath(name))
+    end)
+    configs[name] = nil
+end
+
+local function getCurrentSettings()
+    return {
+        name = "",
+        created = os.time(),
+        nitroForce = BOOST_FORCE,
+        jumpForce = JUMP_FORCE,
+        gravity = currentGravity,
+        nitroColor1 = nitroColor1Hex,
+        nitroColor2 = nitroColor2Hex,
+        nitroEnabled = nitroEnabled,
+        jumpEnabled = jumpEnabled,
+        nitroEffect = nitroEffectEnabled,
+        materialIndex = materialIndex,
+        menuScale = menuScale,
+        nitroKey = nitroKey.Name,
+        jumpKey = jumpKey.Name,
+        menuKey = menuKey.Name,
+    }
+end
+
+local function applyNitroColors()
+    local c1 = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0)
+    local c2 = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0)
+    local seq = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, c1),
+        ColorSequenceKeypoint.new(1, c2),
+    })
+    for _, pe in ipairs(getNitroParticles()) do
+        pe.Color = seq
+    end
+end
+
+local function applySettings(data)
+    if not data then return end
+    BOOST_FORCE = data.nitroForce or BOOST_FORCE
+    JUMP_FORCE = data.jumpForce or JUMP_FORCE
+    currentGravity = data.gravity or currentGravity
+    workspace.Gravity = currentGravity
+    nitroColor1Hex = data.nitroColor1 or nitroColor1Hex
+    nitroColor2Hex = data.nitroColor2 or nitroColor2Hex
+    nitroEnabled = data.nitroEnabled ~= false
+    jumpEnabled = data.jumpEnabled ~= false
+    nitroEffectEnabled = data.nitroEffect ~= false
+    materialIndex = data.materialIndex or materialIndex
+    menuScale = data.menuScale or 1
+    pcall(function()
+        if data.nitroKey then nitroKey = Enum.KeyCode[data.nitroKey] or nitroKey end
+        if data.jumpKey then jumpKey = Enum.KeyCode[data.jumpKey] or jumpKey end
+        if data.menuKey then menuKey = Enum.KeyCode[data.menuKey] or menuKey end
+    end)
+    applyNitroColors()
+end
 
 -- ─────────────────────────────────────────────
 -- HELPERS
@@ -112,7 +230,6 @@ local function makeDraggable(guiObject)
     end)
 end
 
--- ScreenGui só para os botões flutuantes
 local floatingGui = Instance.new("ScreenGui")
 floatingGui.Name = "CustomControlHub"
 floatingGui.ResetOnSpawn = false
@@ -170,28 +287,12 @@ local function getNitroParticles()
     return list
 end
 
-local function applyNitroColors()
-    local c1 = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0)
-    local c2 = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0)
-    local seq = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, c1),
-        ColorSequenceKeypoint.new(1, c2),
-    })
-    for _, pe in ipairs(getNitroParticles()) do
-        pe.Color = seq
-    end
-end
-
 local function setNitroParticlesEnabled(enabled)
-    if not nitroEffectEnabled then
-        enabled = false
-    end
+    if not nitroEffectEnabled then enabled = false end
     local particles = getNitroParticles()
     for _, pe in ipairs(particles) do
         pe.Enabled = enabled
-        if enabled then
-            applyNitroColors()
-        end
+        if enabled then applyNitroColors() end
     end
     return #particles
 end
@@ -224,7 +325,7 @@ local function startBoost()
     activeForce.Force = root.CFrame.LookVector * BOOST_FORCE
     activeForce.ApplyAtCenterOfMass = true
     activeForce.Parent = root
-    local count = setNitroParticlesEnabled(true)
+    setNitroParticlesEnabled(true)
     isBoosting = true
     boostConn = RunService.Heartbeat:Connect(function()
         if not isBoosting or not nitroEnabled then stopBoost() return end
@@ -232,7 +333,7 @@ local function startBoost()
         if not r or not activeForce then stopBoost() return end
         activeForce.Force = r.CFrame.LookVector * BOOST_FORCE
     end)
-    return true, count
+    return true
 end
 
 local function applyJump()
@@ -273,7 +374,6 @@ local function applyWheelMaterial()
     local wheels = getWheels()
     if #wheels == 0 then return 0 end
     local mat = MATERIALS[materialIndex]
-    -- salva originais só na primeira vez
     for _, w in ipairs(wheels) do
         if not originalWheelMaterials[w] then
             originalWheelMaterials[w] = w.Material
@@ -345,19 +445,71 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
    Name = "⚡ CONTROL HUB",
+   Icon = 0,
    LoadingTitle = "Control Hub",
-   LoadingSubtitle = "Nitro | Pulo | Pneu | Gravidade",
+   LoadingSubtitle = "Nitro | Pulo | Pneu | Gravidade | Configs",
+   ShowText = "Control Hub",
+   Theme = "Default",
+   ToggleUIKeybind = "J",
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "ControlHub",
-      FileName = "Config"
+      FileName = "AutoConfig"
    },
    Discord = { Enabled = false },
    KeySystem = false,
 })
 
--- Referências para atualizar textos dinamicamente
 local nitroKeyBtn, jumpKeyBtn, menuKeyBtn
+local configDropdown, configInfoLabel
+local configNameInput
+
+local function refreshConfigList()
+    loadAllConfigs()
+    local names = {}
+    for name in pairs(configs) do
+        table.insert(names, name)
+    end
+    table.sort(names)
+    if #names == 0 then names = {"(nenhuma config)"} end
+    if configDropdown then
+        pcall(function()
+            configDropdown:Refresh(names)
+        end)
+    end
+    return names
+end
+
+local function updateConfigInfo(name)
+    if not configInfoLabel then return end
+    local data = configs[name]
+    if not data then
+        pcall(function()
+            configInfoLabel:Set({
+                Title = "Nenhuma config selecionada",
+                Content = "Salve ou selecione uma config"
+            })
+        end)
+        return
+    end
+    local text = string.format(
+        "Criada: %s\nNitro: %s\nPulo: %s\nGravidade: %s\nCores: %s / %s",
+        timeAgo(data.created),
+        tostring(data.nitroForce or "?"),
+        tostring(data.jumpForce or "?"),
+        tostring(data.gravity or "?"),
+        data.nitroColor1 or "?",
+        data.nitroColor2 or "?"
+    )
+    pcall(function()
+        configInfoLabel:Set({
+            Title = name,
+            Content = text
+        })
+    end)
+end
 
 -- ==================== TAB NITRO ====================
 local NitroTab = Window:CreateTab("⚡ Nitro", 4483362458)
@@ -371,11 +523,7 @@ NitroTab:CreateToggle({
    Callback = function(Value)
       nitroEnabled = Value
       if not Value then stopBoost() end
-      Rayfield:Notify({
-         Title = "Nitro",
-         Content = Value and "Sistema ativado" or "Sistema desativado",
-         Duration = 2
-      })
+      Rayfield:Notify({ Title = "Nitro", Content = Value and "Sistema ativado" or "Sistema desativado", Duration = 2 })
    end,
 })
 
@@ -385,14 +533,8 @@ NitroTab:CreateToggle({
    Flag = "NitroEffect",
    Callback = function(Value)
       nitroEffectEnabled = Value
-      if not Value then
-         setNitroParticlesEnabled(false)
-      end
-      Rayfield:Notify({
-         Title = "Efeito Nitro",
-         Content = Value and "Partículas ativadas" or "Partículas desativadas",
-         Duration = 2
-      })
+      if not Value then setNitroParticlesEnabled(false) end
+      Rayfield:Notify({ Title = "Efeito Nitro", Content = Value and "Partículas ativadas" or "Partículas desativadas", Duration = 2 })
    end,
 })
 
@@ -415,7 +557,6 @@ NitroTab:CreateInput({
 
 NitroTab:CreateSection("Cores das Partículas")
 
--- ColorPicker para preview visual das cores
 NitroTab:CreateColorPicker({
    Name = "Cor Nitro 1 (preview)",
    Color = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0),
@@ -472,11 +613,7 @@ NitroTab:CreateButton({
 nitroKeyBtn = NitroTab:CreateButton({
    Name = "⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]",
    Callback = function()
-      Rayfield:Notify({
-         Title = "Aguardando tecla...",
-         Content = "Pressione a tecla ou botão do controle",
-         Duration = 4
-      })
+      Rayfield:Notify({ Title = "Aguardando tecla...", Content = "Pressione a tecla ou botão do controle", Duration = 4 })
       isBindingKey = true
       bindingType = "nitro"
    end,
@@ -493,11 +630,7 @@ JumpTab:CreateToggle({
    Flag = "JumpSystem",
    Callback = function(Value)
       jumpEnabled = Value
-      Rayfield:Notify({
-         Title = "Pulo",
-         Content = Value and "Sistema ativado" or "Sistema desativado",
-         Duration = 2
-      })
+      Rayfield:Notify({ Title = "Pulo", Content = Value and "Sistema ativado" or "Sistema desativado", Duration = 2 })
    end,
 })
 
@@ -546,11 +679,7 @@ JumpTab:CreateButton({
 jumpKeyBtn = JumpTab:CreateButton({
    Name = "⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]",
    Callback = function()
-      Rayfield:Notify({
-         Title = "Aguardando tecla...",
-         Content = "Pressione a tecla ou botão do controle",
-         Duration = 4
-      })
+      Rayfield:Notify({ Title = "Aguardando tecla...", Content = "Pressione a tecla ou botão do controle", Duration = 4 })
       isBindingKey = true
       bindingType = "jump"
    end,
@@ -588,17 +717,9 @@ PneuTab:CreateButton({
    Callback = function()
       local count, matName = applyWheelMaterial()
       if count > 0 then
-         Rayfield:Notify({
-            Title = "Pneu",
-            Content = "Material " .. matName .. " aplicado em " .. count .. " roda(s)!",
-            Duration = 3
-         })
+         Rayfield:Notify({ Title = "Pneu", Content = "Material " .. matName .. " aplicado em " .. count .. " roda(s)!", Duration = 3 })
       else
-         Rayfield:Notify({
-            Title = "Pneu",
-            Content = "Entre no veículo ou não encontrei FR/FL/RR/RL → Wheel",
-            Duration = 4
-         })
+         Rayfield:Notify({ Title = "Pneu", Content = "Entre no veículo ou não encontrei FR/FL/RR/RL → Wheel", Duration = 4 })
       end
    end,
 })
@@ -608,17 +729,9 @@ PneuTab:CreateButton({
    Callback = function()
       local count = restoreWheelMaterials()
       if count > 0 then
-         Rayfield:Notify({
-            Title = "Pneu",
-            Content = "Material original restaurado em " .. count .. " roda(s)!",
-            Duration = 3
-         })
+         Rayfield:Notify({ Title = "Pneu", Content = "Material original restaurado em " .. count .. " roda(s)!", Duration = 3 })
       else
-         Rayfield:Notify({
-            Title = "Pneu",
-            Content = "Nenhum material original salvo ainda. Aplique um material primeiro.",
-            Duration = 4
-         })
+         Rayfield:Notify({ Title = "Pneu", Content = "Nenhum material original salvo ainda. Aplique um material primeiro.", Duration = 4 })
       end
    end,
 })
@@ -651,11 +764,7 @@ GravityTab:CreateButton({
    Callback = function()
       workspace.Gravity = ORIGINAL_GRAVITY
       currentGravity = ORIGINAL_GRAVITY
-      Rayfield:Notify({
-         Title = "Gravidade",
-         Content = "Restaurada para " .. tostring(ORIGINAL_GRAVITY),
-         Duration = 3
-      })
+      Rayfield:Notify({ Title = "Gravidade", Content = "Restaurada para " .. tostring(ORIGINAL_GRAVITY), Duration = 3 })
    end,
 })
 
@@ -664,19 +773,177 @@ GravityTab:CreateParagraph({
    Content = "Gravidade original do jogo: " .. tostring(ORIGINAL_GRAVITY) .. "\nMínimo: 0 | Máximo: 500"
 })
 
+-- ==================== TAB CONFIGS ====================
+local ConfigsTab = Window:CreateTab("💾 Configs", 4483362458)
+
+ConfigsTab:CreateSection("Salvar Nova Config")
+
+configNameInput = ConfigsTab:CreateInput({
+   Name = "Nome da Config",
+   CurrentValue = "",
+   PlaceholderText = "Ex: MinhaSetup",
+   RemoveTextAfterFocusLost = false,
+   Flag = "ConfigNameInput",
+   Callback = function(Text) end,
+})
+
+ConfigsTab:CreateButton({
+   Name = "💾 Salvar Config Atual",
+   Callback = function()
+      local name = ""
+      pcall(function() name = tostring(configNameInput.CurrentValue or "") end)
+      name = name:gsub("%s+", "")
+      if name == "" or name == "(nenhuma config)" then
+         Rayfield:Notify({ Title = "Erro", Content = "Digite um nome válido para a config", Duration = 3 })
+         return
+      end
+      local data = getCurrentSettings()
+      data.name = name
+      data.created = os.time()
+      if saveConfigToFile(name, data) then
+         configs[name] = data
+         selectedConfigName = name
+         refreshConfigList()
+         updateConfigInfo(name)
+         Rayfield:Notify({ Title = "Config", Content = "Salva: " .. name, Duration = 3 })
+      else
+         Rayfield:Notify({ Title = "Erro", Content = "Não foi possível salvar (executor sem writefile?)", Duration = 4 })
+      end
+   end,
+})
+
+ConfigsTab:CreateSection("Configs Salvas")
+
+loadAllConfigs()
+local initialNames = {}
+for name in pairs(configs) do table.insert(initialNames, name) end
+table.sort(initialNames)
+if #initialNames == 0 then initialNames = {"(nenhuma config)"} end
+
+configDropdown = ConfigsTab:CreateDropdown({
+   Name = "Selecionar Config",
+   Options = initialNames,
+   CurrentOption = {initialNames[1]},
+   MultipleOptions = false,
+   Flag = "SelectedConfig",
+   Callback = function(Option)
+      local name = type(Option) == "table" and Option[1] or Option
+      if name and name ~= "(nenhuma config)" then
+         selectedConfigName = name
+         updateConfigInfo(name)
+      else
+         selectedConfigName = nil
+         updateConfigInfo(nil)
+      end
+   end,
+})
+
+configInfoLabel = ConfigsTab:CreateParagraph({
+   Title = "Nenhuma config selecionada",
+   Content = "Salve ou selecione uma config"
+})
+
+ConfigsTab:CreateSection("Ações")
+
+ConfigsTab:CreateButton({
+   Name = "📂 Carregar Config",
+   Callback = function()
+      if not selectedConfigName or not configs[selectedConfigName] then
+         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config válida", Duration = 3 })
+         return
+      end
+      applySettings(configs[selectedConfigName])
+      Rayfield:Notify({ Title = "Config", Content = "Carregada: " .. selectedConfigName, Duration = 3 })
+   end,
+})
+
+ConfigsTab:CreateButton({
+   Name = "🔄 Substituir pela Atual",
+   Callback = function()
+      if not selectedConfigName or selectedConfigName == "(nenhuma config)" then
+         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config para substituir", Duration = 3 })
+         return
+      end
+      local data = getCurrentSettings()
+      data.name = selectedConfigName
+      data.created = configs[selectedConfigName] and configs[selectedConfigName].created or os.time()
+      if saveConfigToFile(selectedConfigName, data) then
+         configs[selectedConfigName] = data
+         updateConfigInfo(selectedConfigName)
+         Rayfield:Notify({ Title = "Config", Content = "Substituída: " .. selectedConfigName, Duration = 3 })
+      else
+         Rayfield:Notify({ Title = "Erro", Content = "Falha ao substituir", Duration = 3 })
+      end
+   end,
+})
+
+ConfigsTab:CreateButton({
+   Name = "✏️ Renomear Config",
+   Callback = function()
+      if not selectedConfigName or not configs[selectedConfigName] then
+         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config para renomear", Duration = 3 })
+         return
+      end
+      local newName = ""
+      pcall(function() newName = tostring(configNameInput.CurrentValue or "") end)
+      newName = newName:gsub("%s+", "")
+      if newName == "" or newName == selectedConfigName then
+         Rayfield:Notify({ Title = "Erro", Content = "Digite um nome novo no campo acima", Duration = 3 })
+         return
+      end
+      local data = configs[selectedConfigName]
+      data.name = newName
+      if saveConfigToFile(newName, data) then
+         deleteConfigFile(selectedConfigName)
+         configs[newName] = data
+         selectedConfigName = newName
+         refreshConfigList()
+         updateConfigInfo(newName)
+         Rayfield:Notify({ Title = "Config", Content = "Renomeada para: " .. newName, Duration = 3 })
+      else
+         Rayfield:Notify({ Title = "Erro", Content = "Falha ao renomear", Duration = 3 })
+      end
+   end,
+})
+
+ConfigsTab:CreateButton({
+   Name = "🗑️ Apagar Config",
+   Callback = function()
+      if not selectedConfigName or not configs[selectedConfigName] then
+         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config para apagar", Duration = 3 })
+         return
+      end
+      local name = selectedConfigName
+      deleteConfigFile(name)
+      selectedConfigName = nil
+      refreshConfigList()
+      updateConfigInfo(nil)
+      Rayfield:Notify({ Title = "Config", Content = "Apagada: " .. name, Duration = 3 })
+   end,
+})
+
+ConfigsTab:CreateButton({
+   Name = "🔄 Atualizar Lista",
+   Callback = function()
+      refreshConfigList()
+      Rayfield:Notify({ Title = "Configs", Content = "Lista atualizada", Duration = 2 })
+   end,
+})
+
 -- ==================== TAB AJUSTES ====================
 local SettingsTab = Window:CreateTab("⚙️ Ajustes", 4483362458)
 
-SettingsTab:CreateSection("Tecla do Menu")
+SettingsTab:CreateSection("Tecla do Menu (Rayfield)")
+
+SettingsTab:CreateParagraph({
+   Title = "ToggleUIKeybind",
+   Content = "A tecla padrão para abrir/fechar o menu é: J\n(definida no ToggleUIKeybind do Rayfield)"
+})
 
 menuKeyBtn = SettingsTab:CreateButton({
-   Name = "⌨️ Tecla Menu: [" .. menuKey.Name .. "]",
+   Name = "⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]",
    Callback = function()
-      Rayfield:Notify({
-         Title = "Aguardando tecla...",
-         Content = "Pressione a tecla ou botão do controle",
-         Duration = 4
-      })
+      Rayfield:Notify({ Title = "Aguardando tecla...", Content = "Pressione a tecla ou botão do controle", Duration = 4 })
       isBindingKey = true
       bindingType = "menu"
    end,
@@ -693,28 +960,13 @@ SettingsTab:CreateSlider({
    Flag = "MenuScale",
    Callback = function(Value)
       menuScale = Value
-      -- tenta escalar o frame principal do Rayfield
       pcall(function()
          local main = nil
-         -- Rayfield guarda o Main de formas diferentes conforme versão
-         if Rayfield.Main then
-            main = Rayfield.Main
-         elseif typeof(Rayfield) == "table" then
-            for _, v in pairs(Rayfield) do
-               if typeof(v) == "Instance" and v:IsA("Frame") and v.Name == "Main" then
-                  main = v
-                  break
-               end
-            end
-         end
-         -- fallback: procura no CoreGui / PlayerGui
-         if not main then
-            for _, gui in ipairs({game:GetService("CoreGui"), playerGui}) do
-               local rf = gui:FindFirstChild("Rayfield") or gui:FindFirstChild("RayfieldLibrary")
-               if rf then
-                  main = rf:FindFirstChild("Main", true)
-                  if main then break end
-               end
+         for _, gui in ipairs({game:GetService("CoreGui"), playerGui}) do
+            local rf = gui:FindFirstChild("Rayfield") or gui:FindFirstChild("RayfieldLibrary")
+            if rf then
+               main = rf:FindFirstChild("Main", true)
+               if main then break end
             end
          end
          if main and main:IsA("GuiObject") then
@@ -726,7 +978,7 @@ SettingsTab:CreateSlider({
 
 SettingsTab:CreateParagraph({
    Title = "Informações",
-   Content = "• Nitro: força + partículas NitroFire\n• Cores: use o seletor de cor (preview)\n• Pneu: FR/FL/RR/RL → Wheel\n• Tecla padrão do menu: J\n• Suporte a teclado + controle\n• Escala: 0.5 (mín) → 1 (original) → 2 (máx)"
+   Content = "• Nitro: força + partículas NitroFire\n• Cores: use o seletor de cor (preview)\n• Pneu: FR/FL/RR/RL → Wheel\n• Tecla padrão do menu: J\n• Suporte a teclado + controle\n• Configs são salvas na pasta ControlHub/Configs"
 })
 
 -- ─────────────────────────────────────────────
@@ -739,22 +991,16 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
         if bindingType == "nitro" then
             nitroKey = input.KeyCode
-            if nitroKeyBtn then
-               nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]")
-            end
+            pcall(function() nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end)
             Rayfield:Notify({ Title = "Tecla definida", Content = "Nitro: " .. nitroKey.Name, Duration = 3 })
         elseif bindingType == "jump" then
             jumpKey = input.KeyCode
-            if jumpKeyBtn then
-               jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]")
-            end
+            pcall(function() jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end)
             Rayfield:Notify({ Title = "Tecla definida", Content = "Pulo: " .. jumpKey.Name, Duration = 3 })
         elseif bindingType == "menu" then
             menuKey = input.KeyCode
-            if menuKeyBtn then
-               menuKeyBtn:Set("⌨️ Tecla Menu: [" .. menuKey.Name .. "]")
-            end
-            Rayfield:Notify({ Title = "Tecla definida", Content = "Menu: " .. menuKey.Name, Duration = 3 })
+            pcall(function() menuKeyBtn:Set("⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]") end)
+            Rayfield:Notify({ Title = "Tecla definida", Content = "Menu Extra: " .. menuKey.Name, Duration = 3 })
         end
         isBindingKey = false
         bindingType = nil
@@ -784,8 +1030,13 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
+task.spawn(function()
+    task.wait(0.5)
+    refreshConfigList()
+end)
+
 Rayfield:Notify({
    Title = "Control Hub",
-   Content = "Carregado com sucesso! ⚡",
+   Content = "Carregado com sucesso! ⚡  |  Tecla do menu: J",
    Duration = 4
 })
