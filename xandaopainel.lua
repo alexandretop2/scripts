@@ -66,6 +66,22 @@ local ORIGINAL_GRAVITY = workspace.Gravity
 local currentGravity = workspace.Gravity
 local menuScale = 1
 
+local stopSpeedLimit, startSpeedLimit, setMaxSpeedEnabled
+
+-- Velocidade máxima
+local maxSpeedEnabled = false
+local MAX_SPEED = 150  -- studs/s
+local speedLimitConn = nil
+
+-- Conversor: 1 stud ≈ 0.28 m (ajuste STUDS_TO_METERS se precisar)
+local STUDS_TO_METERS = 0.28
+local function studsToKmh(studs)
+    return (tonumber(studs) or 0) * STUDS_TO_METERS * 3.6
+end
+local function kmhToStuds(kmh)
+    return (tonumber(kmh) or 0) / (STUDS_TO_METERS * 3.6)
+end
+
 -- Config system
 local CONFIG_FOLDER = "ControlHub/Configs"
 local configs = {}
@@ -415,6 +431,8 @@ local function getCurrentSettings()
         nitroEffect = nitroEffectEnabled,
         materialIndex = materialIndex,
         menuScale = menuScale,
+        maxSpeedEnabled = maxSpeedEnabled,
+        maxSpeed = MAX_SPEED,
         nitroKey = nitroKey.Name,
         jumpKey = jumpKey.Name,
         menuKey = menuKey.Name,
@@ -435,6 +453,12 @@ local function applySettings(data)
     materialIndex = tonumber(data.materialIndex) or materialIndex
     if materialIndex < 1 or materialIndex > #MATERIALS then materialIndex = 1 end
     menuScale = tonumber(data.menuScale) or 1
+    MAX_SPEED = tonumber(data.maxSpeed) or MAX_SPEED
+    local enableMax = data.maxSpeedEnabled == true
+    maxSpeedEnabled = enableMax
+    if setMaxSpeedEnabled then
+        setMaxSpeedEnabled(enableMax)
+    end
     pcall(function()
         if data.nitroKey and Enum.KeyCode[data.nitroKey] then
             nitroKey = Enum.KeyCode[data.nitroKey]
@@ -468,6 +492,8 @@ local function applySettings(data)
         end
         if ui.gravitySlider then ui.gravitySlider:Set(currentGravity) end
         if ui.menuScaleSlider then ui.menuScaleSlider:Set(menuScale) end
+        if ui.maxSpeedToggle then ui.maxSpeedToggle:Set(maxSpeedEnabled) end
+        if ui.maxSpeedSlider then ui.maxSpeedSlider:Set(MAX_SPEED) end
         if nitroKeyBtn then nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end
         if jumpKeyBtn then jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end
         if menuKeyBtn then menuKeyBtn:Set("⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]") end
@@ -500,6 +526,41 @@ local function getConfigNames()
 end
 
 -- ─────────────────────────────────────────────
+-- VELOCIDADE MÁXIMA
+-- ─────────────────────────────────────────────
+function stopSpeedLimit()
+    if speedLimitConn then
+        speedLimitConn:Disconnect()
+        speedLimitConn = nil
+    end
+end
+
+function startSpeedLimit()
+    stopSpeedLimit()
+    if not maxSpeedEnabled then return end
+    speedLimitConn = RunService.Heartbeat:Connect(function()
+        if not maxSpeedEnabled then return end
+        local root = getVehicleRoot()
+        if not root then return end
+        local vel = root.AssemblyLinearVelocity
+        local speed = vel.Magnitude
+        if speed > MAX_SPEED and speed > 0.1 then
+            root.AssemblyLinearVelocity = vel.Unit * MAX_SPEED
+        end
+    end)
+end
+
+function setMaxSpeedEnabled(value)
+    maxSpeedEnabled = value
+    if value then
+        startSpeedLimit()
+    else
+        stopSpeedLimit()
+    end
+end
+
+
+-- ─────────────────────────────────────────────
 -- RAYFIELD UI
 -- ─────────────────────────────────────────────
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -508,7 +569,7 @@ local Window = Rayfield:CreateWindow({
    Name = "⚡ CONTROL HUB",
    Icon = 0,
    LoadingTitle = "Control Hub",
-   LoadingSubtitle = "Nitro | Pulo | Pneu | Gravidade | Configs",
+   LoadingSubtitle = "Nitro | Pulo | Pneu | Velocidade | Gravidade | Configs",
    ShowText = "Control Hub",
    Theme = "Default",
    ToggleUIKeybind = "J",
@@ -538,6 +599,10 @@ local ui = {
     materialDropdown = nil,
     gravitySlider = nil,
     menuScaleSlider = nil,
+    maxSpeedToggle = nil,
+    maxSpeedSlider = nil,
+    convertStudsInput = nil,
+    convertKmhInput = nil,
 }
 
 local function updateConfigInfo(name)
@@ -610,8 +675,7 @@ ui.nitroToggle = NitroTab:CreateToggle({
    Callback = function(Value)
       nitroEnabled = Value
       if not Value then stopBoost() end
-      Rayfield:Notify({ Title = "Nitro", Content = Value and "Sistema ativado" or "Sistema desativado", Duration = 2 })
-   end,
+end,
 })
 
 ui.nitroEffectToggle = NitroTab:CreateToggle({
@@ -621,8 +685,7 @@ ui.nitroEffectToggle = NitroTab:CreateToggle({
    Callback = function(Value)
       nitroEffectEnabled = Value
       if not Value then setNitroParticlesEnabled(false) end
-      Rayfield:Notify({ Title = "Efeito Nitro", Content = Value and "Partículas ativadas" or "Partículas desativadas", Duration = 2 })
-   end,
+end,
 })
 
 NitroTab:CreateSection("Força do Nitro")
@@ -637,8 +700,7 @@ ui.nitroForceInput = NitroTab:CreateInput({
       local v = tonumber(Text)
       if v then
          BOOST_FORCE = math.clamp(v, 100, 1000000)
-         Rayfield:Notify({ Title = "Nitro", Content = "Força: " .. BOOST_FORCE, Duration = 2 })
-      end
+end
    end,
 })
 
@@ -679,29 +741,23 @@ NitroTab:CreateButton({
          local old = floatingGui:FindFirstChild("FloatingNitro")
          if old then old:Destroy() end
          nitroBtnExists = false
-         Rayfield:Notify({ Title = "Botão Nitro", Content = "Removido", Duration = 2 })
-      else
+else
          createFloatingButton("FloatingNitro", "⚡", Color3.fromRGB(230, 120, 0), function(state)
             if state then
                local ok = startBoost()
-               if not ok then
-                  Rayfield:Notify({ Title = "Nitro", Content = "Entre no veículo ou sistema desativado!", Duration = 3 })
-               end
             else
                stopBoost()
             end
          end, true)
          nitroBtnExists = true
-         Rayfield:Notify({ Title = "Botão Nitro", Content = "Criado (arraste para mover)", Duration = 2 })
-      end
+end
    end,
 })
 
 nitroKeyBtn = NitroTab:CreateButton({
    Name = "⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]",
    Callback = function()
-      Rayfield:Notify({ Title = "Aguardando tecla...", Content = "Pressione a tecla ou botão do controle", Duration = 4 })
-      isBindingKey = true
+isBindingKey = true
       bindingType = "nitro"
    end,
 })
@@ -717,8 +773,7 @@ ui.jumpToggle = JumpTab:CreateToggle({
    Flag = "JumpSystem",
    Callback = function(Value)
       jumpEnabled = Value
-      Rayfield:Notify({ Title = "Pulo", Content = Value and "Sistema ativado" or "Sistema desativado", Duration = 2 })
-   end,
+end,
 })
 
 JumpTab:CreateSection("Poder do Pulo")
@@ -733,8 +788,7 @@ ui.jumpForceInput = JumpTab:CreateInput({
       local v = tonumber(Text)
       if v then
          JUMP_FORCE = math.clamp(v, 0, 5000)
-         Rayfield:Notify({ Title = "Pulo", Content = "Força: " .. JUMP_FORCE, Duration = 2 })
-      end
+end
    end,
 })
 
@@ -747,27 +801,21 @@ JumpTab:CreateButton({
          local old = floatingGui:FindFirstChild("FloatingJump")
          if old then old:Destroy() end
          jumpBtnExists = false
-         Rayfield:Notify({ Title = "Botão Pulo", Content = "Removido", Duration = 2 })
-      else
+else
          createFloatingButton("FloatingJump", "🦘", Color3.fromRGB(0, 150, 220), function()
             local ok = applyJump()
             if not ok then
-               Rayfield:Notify({ Title = "Pulo", Content = "Entre no veículo ou sistema desativado!", Duration = 3 })
-            else
-               Rayfield:Notify({ Title = "Pulo", Content = "Aplicado!", Duration = 1.5 })
-            end
+end
          end, false)
          jumpBtnExists = true
-         Rayfield:Notify({ Title = "Botão Pulo", Content = "Criado (arraste para mover)", Duration = 2 })
-      end
+end
    end,
 })
 
 jumpKeyBtn = JumpTab:CreateButton({
    Name = "⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]",
    Callback = function()
-      Rayfield:Notify({ Title = "Aguardando tecla...", Content = "Pressione a tecla ou botão do controle", Duration = 4 })
-      isBindingKey = true
+isBindingKey = true
       bindingType = "jump"
    end,
 })
@@ -804,10 +852,7 @@ PneuTab:CreateButton({
    Callback = function()
       local count, matName = applyWheelMaterial()
       if count > 0 then
-         Rayfield:Notify({ Title = "Pneu", Content = "Material " .. matName .. " aplicado em " .. count .. " roda(s)!", Duration = 3 })
-      else
-         Rayfield:Notify({ Title = "Pneu", Content = "Entre no veículo ou não encontrei FR/FL/RR/RL → Wheel", Duration = 4 })
-      end
+end
    end,
 })
 
@@ -816,10 +861,7 @@ PneuTab:CreateButton({
    Callback = function()
       local count = restoreWheelMaterials()
       if count > 0 then
-         Rayfield:Notify({ Title = "Pneu", Content = "Material original restaurado em " .. count .. " roda(s)!", Duration = 3 })
-      else
-         Rayfield:Notify({ Title = "Pneu", Content = "Nenhum material original salvo ainda. Aplique um material primeiro.", Duration = 4 })
-      end
+end
    end,
 })
 
@@ -851,13 +893,122 @@ GravityTab:CreateButton({
    Callback = function()
       workspace.Gravity = ORIGINAL_GRAVITY
       currentGravity = ORIGINAL_GRAVITY
-      Rayfield:Notify({ Title = "Gravidade", Content = "Restaurada para " .. tostring(ORIGINAL_GRAVITY), Duration = 3 })
-   end,
+end,
 })
 
 GravityTab:CreateParagraph({
    Title = "Info",
    Content = "Gravidade original do jogo: " .. tostring(ORIGINAL_GRAVITY) .. "\nMínimo: 0 | Máximo: 500"
+})
+
+-- ==================== TAB VELOCIDADE ====================
+local SpeedTab = Window:CreateTab("🏎️ Velocidade", 4483362458)
+
+local lastConvertedStuds = MAX_SPEED
+
+SpeedTab:CreateSection("Limite de Velocidade")
+
+ui.maxSpeedToggle = SpeedTab:CreateToggle({
+   Name = "Ativar Velocidade Máxima",
+   CurrentValue = false,
+   Flag = "MaxSpeedEnabled",
+   Callback = function(Value)
+      setMaxSpeedEnabled(Value)
+   end,
+})
+
+ui.maxSpeedSlider = SpeedTab:CreateSlider({
+   Name = "Velocidade Máxima (studs/s)",
+   Range = {10, 500},
+   Increment = 1,
+   Suffix = " studs/s",
+   CurrentValue = MAX_SPEED,
+   Flag = "MaxSpeed",
+   Callback = function(Value)
+      MAX_SPEED = Value
+      lastConvertedStuds = Value
+   end,
+})
+
+SpeedTab:CreateInput({
+   Name = "Velocidade Máxima (digitar studs/s)",
+   CurrentValue = tostring(MAX_SPEED),
+   PlaceholderText = "150",
+   RemoveTextAfterFocusLost = false,
+   Flag = "MaxSpeedInput",
+   Callback = function(Text)
+      local v = tonumber(Text)
+      if v then
+         MAX_SPEED = math.clamp(v, 1, 2000)
+         lastConvertedStuds = MAX_SPEED
+         pcall(function()
+            if ui.maxSpeedSlider then ui.maxSpeedSlider:Set(math.clamp(MAX_SPEED, 10, 500)) end
+         end)
+      end
+   end,
+})
+
+SpeedTab:CreateSection("Conversor de Velocidade")
+
+SpeedTab:CreateParagraph({
+   Title = "Fórmula (mude no script se precisar)",
+   Content = "STUDS_TO_METERS = " .. tostring(STUDS_TO_METERS) .. "\n1 stud ≈ " .. tostring(STUDS_TO_METERS) .. " m\nstuds/s → km/h = studs * " .. tostring(STUDS_TO_METERS) .. " * 3.6\nkm/h → studs/s = km/h / (" .. tostring(STUDS_TO_METERS) .. " * 3.6)"
+})
+
+ui.convertStudsInput = SpeedTab:CreateInput({
+   Name = "Digite studs/s",
+   CurrentValue = tostring(MAX_SPEED),
+   PlaceholderText = "150",
+   RemoveTextAfterFocusLost = false,
+   Flag = "ConvertStuds",
+   Callback = function(Text)
+      local v = tonumber(Text)
+      if v then
+         lastConvertedStuds = v
+         pcall(function()
+            if ui.convertKmhInput then
+               ui.convertKmhInput:Set(string.format("%.2f", studsToKmh(v)))
+            end
+         end)
+      end
+   end,
+})
+
+ui.convertKmhInput = SpeedTab:CreateInput({
+   Name = "Digite km/h",
+   CurrentValue = string.format("%.2f", studsToKmh(MAX_SPEED)),
+   PlaceholderText = "151.20",
+   RemoveTextAfterFocusLost = false,
+   Flag = "ConvertKmh",
+   Callback = function(Text)
+      local v = tonumber(Text)
+      if v then
+         local studs = kmhToStuds(v)
+         lastConvertedStuds = studs
+         pcall(function()
+            if ui.convertStudsInput then
+               ui.convertStudsInput:Set(string.format("%.2f", studs))
+            end
+         end)
+      end
+   end,
+})
+
+SpeedTab:CreateButton({
+   Name = "📌 Aplicar valor convertido na Velocidade Máxima",
+   Callback = function()
+      if lastConvertedStuds and lastConvertedStuds > 0 then
+         MAX_SPEED = math.clamp(lastConvertedStuds, 1, 2000)
+         pcall(function()
+            if ui.maxSpeedSlider then ui.maxSpeedSlider:Set(math.clamp(MAX_SPEED, 10, 500)) end
+         end)
+      end
+   end,
+})
+
+SpeedTab:CreateParagraph({
+   Title = "Info",
+   Content = "Ative o toggle para limitar a velocidade do veículo (corta AssemblyLinearVelocity).\nUse o conversor e depois \"Aplicar valor convertido\".\nPara mudar a escala do conversor, edite STUDS_TO_METERS no script."
 })
 
 -- ==================== TAB CONFIGS (CORRIGIDA) ====================
@@ -880,16 +1031,10 @@ ConfigsTab:CreateButton({
    Name = "💾 Salvar Config Atual",
    Callback = function()
       local name = configNameText
-      if name == "" or name == "(nenhuma config)" then
-         Rayfield:Notify({ Title = "Erro", Content = "Digite um nome válido no campo acima", Duration = 3 })
-         return
-      end
+      if name == "" or name == "(nenhuma config)" then return end
       -- remove caracteres problemáticos
       name = name:gsub("[/\\:*?\"<>|]", "")
-      if name == "" then
-         Rayfield:Notify({ Title = "Erro", Content = "Nome inválido", Duration = 3 })
-         return
-      end
+      if name == "" then return end
       local data = getCurrentSettings()
       data.name = name
       data.created = os.time()
@@ -898,9 +1043,6 @@ ConfigsTab:CreateButton({
          configs[name] = data
          selectedConfigName = name
          refreshConfigList(name)
-         Rayfield:Notify({ Title = "Config salva", Content = "Nome: " .. name, Duration = 3 })
-      else
-         Rayfield:Notify({ Title = "Erro ao salvar", Content = "Seu executor precisa de writefile. " .. tostring(err or ""), Duration = 5 })
       end
    end,
 })
@@ -954,53 +1096,27 @@ ConfigsTab:CreateSection("Ações")
 ConfigsTab:CreateButton({
    Name = "📂 Carregar Config",
    Callback = function()
-      -- se selectedConfigName estiver nil, tenta pegar a primeira da lista
       if not selectedConfigName or not configs[selectedConfigName] then
          local names = getConfigNames()
          if #names > 0 then
             selectedConfigName = names[1]
          end
       end
-      if not selectedConfigName or not configs[selectedConfigName] then
-         Rayfield:Notify({ Title = "Erro", Content = "Nenhuma config disponível. Salve uma primeiro.", Duration = 3 })
-         return
-      end
-      local ok = applySettings(configs[selectedConfigName])
-      if ok then
-         -- atualiza textos das teclas
-         pcall(function()
-            if nitroKeyBtn then nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end
-            if jumpKeyBtn then jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end
-            if menuKeyBtn then menuKeyBtn:Set("⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]") end
-         end)
-         Rayfield:Notify({
-            Title = "Config carregada",
-            Content = selectedConfigName .. " | Nitro: " .. BOOST_FORCE .. " | Pulo: " .. JUMP_FORCE .. " | Grav: " .. currentGravity,
-            Duration = 4
-         })
-      else
-         Rayfield:Notify({ Title = "Erro", Content = "Falha ao aplicar a config", Duration = 3 })
-      end
+      if not selectedConfigName or not configs[selectedConfigName] then return end
+      applySettings(configs[selectedConfigName])
    end,
 })
 
 ConfigsTab:CreateButton({
    Name = "🔄 Substituir pela Atual",
    Callback = function()
-      if not selectedConfigName or selectedConfigName == "(nenhuma config)" or not configs[selectedConfigName] then
-         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config válida na lista", Duration = 3 })
-         return
-      end
+      if not selectedConfigName or selectedConfigName == "(nenhuma config)" or not configs[selectedConfigName] then return end
       local data = getCurrentSettings()
       data.name = selectedConfigName
       data.created = configs[selectedConfigName].created or os.time()
-      local ok = saveConfigToFile(selectedConfigName, data)
-      if ok then
+      if saveConfigToFile(selectedConfigName, data) then
          configs[selectedConfigName] = data
          updateConfigInfo(selectedConfigName)
-         Rayfield:Notify({ Title = "Config", Content = "Substituída: " .. selectedConfigName, Duration = 3 })
-      else
-         Rayfield:Notify({ Title = "Erro", Content = "Falha ao substituir (writefile?)", Duration = 3 })
       end
    end,
 })
@@ -1008,26 +1124,16 @@ ConfigsTab:CreateButton({
 ConfigsTab:CreateButton({
    Name = "✏️ Renomear Config",
    Callback = function()
-      if not selectedConfigName or not configs[selectedConfigName] then
-         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config para renomear", Duration = 3 })
-         return
-      end
+      if not selectedConfigName or not configs[selectedConfigName] then return end
       local newName = configNameText:gsub("[/\\:*?\"<>|]", "")
-      if newName == "" or newName == selectedConfigName then
-         Rayfield:Notify({ Title = "Erro", Content = "Digite um nome NOVO no campo de nome acima", Duration = 3 })
-         return
-      end
+      if newName == "" or newName == selectedConfigName then return end
       local data = configs[selectedConfigName]
       data.name = newName
-      local ok = saveConfigToFile(newName, data)
-      if ok then
+      if saveConfigToFile(newName, data) then
          deleteConfigFile(selectedConfigName)
          configs[newName] = data
          selectedConfigName = newName
          refreshConfigList(newName)
-         Rayfield:Notify({ Title = "Config", Content = "Renomeada para: " .. newName, Duration = 3 })
-      else
-         Rayfield:Notify({ Title = "Erro", Content = "Falha ao renomear", Duration = 3 })
       end
    end,
 })
@@ -1035,15 +1141,11 @@ ConfigsTab:CreateButton({
 ConfigsTab:CreateButton({
    Name = "🗑️ Apagar Config",
    Callback = function()
-      if not selectedConfigName or not configs[selectedConfigName] then
-         Rayfield:Notify({ Title = "Erro", Content = "Selecione uma config para apagar", Duration = 3 })
-         return
-      end
+      if not selectedConfigName or not configs[selectedConfigName] then return end
       local name = selectedConfigName
       deleteConfigFile(name)
       selectedConfigName = nil
       refreshConfigList()
-      Rayfield:Notify({ Title = "Config", Content = "Apagada: " .. name, Duration = 3 })
    end,
 })
 
@@ -1051,9 +1153,6 @@ ConfigsTab:CreateButton({
    Name = "🔄 Atualizar Lista",
    Callback = function()
       refreshConfigList()
-      local n = 0
-      for _ in pairs(configs) do n = n + 1 end
-      Rayfield:Notify({ Title = "Configs", Content = "Lista atualizada (" .. n .. " config(s))", Duration = 2 })
    end,
 })
 
@@ -1070,8 +1169,7 @@ SettingsTab:CreateParagraph({
 menuKeyBtn = SettingsTab:CreateButton({
    Name = "⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]",
    Callback = function()
-      Rayfield:Notify({ Title = "Aguardando tecla...", Content = "Pressione a tecla ou botão do controle", Duration = 4 })
-      isBindingKey = true
+isBindingKey = true
       bindingType = "menu"
    end,
 })
@@ -1118,15 +1216,12 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if bindingType == "nitro" then
             nitroKey = input.KeyCode
             pcall(function() nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end)
-            Rayfield:Notify({ Title = "Tecla definida", Content = "Nitro: " .. nitroKey.Name, Duration = 3 })
         elseif bindingType == "jump" then
             jumpKey = input.KeyCode
             pcall(function() jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end)
-            Rayfield:Notify({ Title = "Tecla definida", Content = "Pulo: " .. jumpKey.Name, Duration = 3 })
         elseif bindingType == "menu" then
             menuKey = input.KeyCode
             pcall(function() menuKeyBtn:Set("⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]") end)
-            Rayfield:Notify({ Title = "Tecla definida", Content = "Menu Extra: " .. menuKey.Name, Duration = 3 })
         end
         isBindingKey = false
         bindingType = nil
@@ -1136,17 +1231,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
 
     if input.KeyCode == nitroKey and nitroEnabled then
-        local ok = startBoost()
-        if not ok then
-            Rayfield:Notify({ Title = "Nitro", Content = "Entre no veículo!", Duration = 2 })
-        end
+        startBoost()
     end
 
     if input.KeyCode == jumpKey and jumpEnabled then
-        local ok = applyJump()
-        if not ok then
-            Rayfield:Notify({ Title = "Pulo", Content = "Entre no veículo!", Duration = 2 })
-        end
+        applyJump()
     end
 end)
 
@@ -1160,9 +1249,3 @@ task.spawn(function()
     task.wait(0.8)
     refreshConfigList()
 end)
-
-Rayfield:Notify({
-   Title = "Xandão",
-   Content = "Carregado! Tecla do menu: J",
-   Duration = 4
-})
