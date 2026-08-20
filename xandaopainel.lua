@@ -73,7 +73,9 @@ local maxSpeedEnabled = false
 local MAX_SPEED = 150  -- studs/s
 local speedLimitConn = nil
 
--- Conversor: 1 stud ≈ 0.28 m (ajuste STUDS_TO_METERS se precisar)
+-- Conversor km/h ↔ studs/s
+-- Se a velocidade no jogo não bater com o valor digitado, mude STUDS_TO_METERS
+-- Exemplos comuns: 0.28 | 0.3 | 0.35 | 0.5 | 1
 local STUDS_TO_METERS = 0.28
 local function studsToKmh(studs)
     return (tonumber(studs) or 0) * STUDS_TO_METERS * 3.6
@@ -431,8 +433,6 @@ local function getCurrentSettings()
         nitroEffect = nitroEffectEnabled,
         materialIndex = materialIndex,
         menuScale = menuScale,
-        maxSpeedEnabled = maxSpeedEnabled,
-        maxSpeed = MAX_SPEED,
         nitroKey = nitroKey.Name,
         jumpKey = jumpKey.Name,
         menuKey = menuKey.Name,
@@ -453,12 +453,6 @@ local function applySettings(data)
     materialIndex = tonumber(data.materialIndex) or materialIndex
     if materialIndex < 1 or materialIndex > #MATERIALS then materialIndex = 1 end
     menuScale = tonumber(data.menuScale) or 1
-    MAX_SPEED = tonumber(data.maxSpeed) or MAX_SPEED
-    local enableMax = data.maxSpeedEnabled == true
-    maxSpeedEnabled = enableMax
-    if setMaxSpeedEnabled then
-        setMaxSpeedEnabled(enableMax)
-    end
     pcall(function()
         if data.nitroKey and Enum.KeyCode[data.nitroKey] then
             nitroKey = Enum.KeyCode[data.nitroKey]
@@ -492,8 +486,6 @@ local function applySettings(data)
         end
         if ui.gravitySlider then ui.gravitySlider:Set(currentGravity) end
         if ui.menuScaleSlider then ui.menuScaleSlider:Set(menuScale) end
-        if ui.maxSpeedToggle then ui.maxSpeedToggle:Set(maxSpeedEnabled) end
-        if ui.maxSpeedSlider then ui.maxSpeedSlider:Set(MAX_SPEED) end
         if nitroKeyBtn then nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end
         if jumpKeyBtn then jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end
         if menuKeyBtn then menuKeyBtn:Set("⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]") end
@@ -600,9 +592,10 @@ local ui = {
     gravitySlider = nil,
     menuScaleSlider = nil,
     maxSpeedToggle = nil,
-    maxSpeedSlider = nil,
-    convertStudsInput = nil,
-    convertKmhInput = nil,
+    maxSpeedKmhInput = nil,
+    convertKmhOnly = nil,
+    convertStudsResult = nil,
+    convertKmhResult = nil,
 }
 
 local function updateConfigInfo(name)
@@ -904,12 +897,13 @@ GravityTab:CreateParagraph({
 -- ==================== TAB VELOCIDADE ====================
 local SpeedTab = Window:CreateTab("🏎️ Velocidade", 4483362458)
 
-local lastConvertedStuds = MAX_SPEED
+-- valor que o usuário vê/edita em km/h
+local maxSpeedKmh = studsToKmh(MAX_SPEED)
 
 SpeedTab:CreateSection("Limite de Velocidade")
 
 ui.maxSpeedToggle = SpeedTab:CreateToggle({
-   Name = "Ativar Velocidade Máxima",
+   Name = "Ativar Limite de Velocidade",
    CurrentValue = false,
    Flag = "MaxSpeedEnabled",
    Callback = function(Value)
@@ -917,98 +911,80 @@ ui.maxSpeedToggle = SpeedTab:CreateToggle({
    end,
 })
 
-ui.maxSpeedSlider = SpeedTab:CreateSlider({
-   Name = "Velocidade Máxima (studs/s)",
-   Range = {10, 500},
-   Increment = 1,
-   Suffix = " studs/s",
-   CurrentValue = MAX_SPEED,
-   Flag = "MaxSpeed",
-   Callback = function(Value)
-      MAX_SPEED = Value
-      lastConvertedStuds = Value
+ui.maxSpeedKmhInput = SpeedTab:CreateInput({
+   Name = "Velocidade máxima (km/h)",
+   CurrentValue = string.format("%.0f", maxSpeedKmh),
+   PlaceholderText = "Ex: 360",
+   RemoveTextAfterFocusLost = false,
+   Flag = "MaxSpeedKmh",
+   Callback = function(Text)
+      local kmh = tonumber(Text)
+      if not kmh then return end
+      kmh = math.clamp(kmh, 1, 5000)
+      maxSpeedKmh = kmh
+      MAX_SPEED = kmhToStuds(kmh)
    end,
+})
+
+SpeedTab:CreateParagraph({
+   Title = "Como funciona",
+   Content = "Digite a velocidade em km/h e ative o toggle.\nO script converte automaticamente para studs/s e limita o veículo.\n\nProporção atual: 1 stud = " .. tostring(STUDS_TO_METERS) .. " m\n(edite STUDS_TO_METERS no script se a velocidade no jogo não bater)"
+})
+
+SpeedTab:CreateSection("Conversor rápido")
+
+ui.convertKmhOnly = SpeedTab:CreateInput({
+   Name = "km/h → ver em studs/s",
+   CurrentValue = "",
+   PlaceholderText = "Digite km/h",
+   RemoveTextAfterFocusLost = false,
+   Flag = "ConvertKmhOnly",
+   Callback = function(Text)
+      local kmh = tonumber(Text)
+      if not kmh then return end
+      local studs = kmhToStuds(kmh)
+      pcall(function()
+         if ui.convertStudsResult then
+            ui.convertStudsResult:Set(string.format("%.1f studs/s", studs))
+         end
+      end)
+   end,
+})
+
+ui.convertStudsResult = SpeedTab:CreateInput({
+   Name = "Resultado (studs/s)",
+   CurrentValue = "",
+   PlaceholderText = "—",
+   RemoveTextAfterFocusLost = false,
+   Flag = "ConvertStudsResult",
+   Callback = function() end,
 })
 
 SpeedTab:CreateInput({
-   Name = "Velocidade Máxima (digitar studs/s)",
-   CurrentValue = tostring(MAX_SPEED),
-   PlaceholderText = "150",
+   Name = "studs/s → ver em km/h",
+   CurrentValue = "",
+   PlaceholderText = "Digite studs/s",
    RemoveTextAfterFocusLost = false,
-   Flag = "MaxSpeedInput",
+   Flag = "ConvertStudsOnly",
    Callback = function(Text)
-      local v = tonumber(Text)
-      if v then
-         MAX_SPEED = math.clamp(v, 1, 2000)
-         lastConvertedStuds = MAX_SPEED
-         pcall(function()
-            if ui.maxSpeedSlider then ui.maxSpeedSlider:Set(math.clamp(MAX_SPEED, 10, 500)) end
-         end)
-      end
+      local studs = tonumber(Text)
+      if not studs then return end
+      local kmh = studsToKmh(studs)
+      pcall(function()
+         if ui.convertKmhResult then
+            ui.convertKmhResult:Set(string.format("%.1f km/h", kmh))
+         end
+      end)
    end,
 })
 
-SpeedTab:CreateSection("Conversor de Velocidade")
-
-SpeedTab:CreateParagraph({
-   Title = "Fórmula (mude no script se precisar)",
-   Content = "STUDS_TO_METERS = " .. tostring(STUDS_TO_METERS) .. "\n1 stud ≈ " .. tostring(STUDS_TO_METERS) .. " m\nstuds/s → km/h = studs * " .. tostring(STUDS_TO_METERS) .. " * 3.6\nkm/h → studs/s = km/h / (" .. tostring(STUDS_TO_METERS) .. " * 3.6)"
-})
-
-ui.convertStudsInput = SpeedTab:CreateInput({
-   Name = "Digite studs/s",
-   CurrentValue = tostring(MAX_SPEED),
-   PlaceholderText = "150",
+ui.convertKmhResult = SpeedTab:CreateInput({
+   Name = "Resultado (km/h)",
+   CurrentValue = "",
+   PlaceholderText = "—",
    RemoveTextAfterFocusLost = false,
-   Flag = "ConvertStuds",
-   Callback = function(Text)
-      local v = tonumber(Text)
-      if v then
-         lastConvertedStuds = v
-         pcall(function()
-            if ui.convertKmhInput then
-               ui.convertKmhInput:Set(string.format("%.2f", studsToKmh(v)))
-            end
-         end)
-      end
-   end,
-})
-
-ui.convertKmhInput = SpeedTab:CreateInput({
-   Name = "Digite km/h",
-   CurrentValue = string.format("%.2f", studsToKmh(MAX_SPEED)),
-   PlaceholderText = "151.20",
-   RemoveTextAfterFocusLost = false,
-   Flag = "ConvertKmh",
-   Callback = function(Text)
-      local v = tonumber(Text)
-      if v then
-         local studs = kmhToStuds(v)
-         lastConvertedStuds = studs
-         pcall(function()
-            if ui.convertStudsInput then
-               ui.convertStudsInput:Set(string.format("%.2f", studs))
-            end
-         end)
-      end
-   end,
-})
-
-SpeedTab:CreateButton({
-   Name = "📌 Aplicar valor convertido na Velocidade Máxima",
-   Callback = function()
-      if lastConvertedStuds and lastConvertedStuds > 0 then
-         MAX_SPEED = math.clamp(lastConvertedStuds, 1, 2000)
-         pcall(function()
-            if ui.maxSpeedSlider then ui.maxSpeedSlider:Set(math.clamp(MAX_SPEED, 10, 500)) end
-         end)
-      end
-   end,
-})
-
-SpeedTab:CreateParagraph({
-   Title = "Info",
-   Content = "Ative o toggle para limitar a velocidade do veículo (corta AssemblyLinearVelocity).\nUse o conversor e depois \"Aplicar valor convertido\".\nPara mudar a escala do conversor, edite STUDS_TO_METERS no script."
+   Flag = "ConvertKmhResult",
+   Callback = function() end,
 })
 
 -- ==================== TAB CONFIGS (CORRIGIDA) ====================
