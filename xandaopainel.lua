@@ -265,11 +265,15 @@ local function getWheels()
     local car = getCarModel()
     if not car then return {} end
     local wheels = {}
-    local names = {"FR", "FL", "RR", "RL"}
+
+    -- 1. Tenta o padrão clássico FR/FL/RR/RL → Wheel
+    local names = {"FR", "FL", "RR", "RL", "FrontRight", "FrontLeft", "RearRight", "RearLeft"}
     for _, name in ipairs(names) do
         local wheelModel = car:FindFirstChild(name, true)
         if wheelModel then
             local wheelPart = wheelModel:FindFirstChild("Wheel", true)
+                or wheelModel:FindFirstChild("Tire", true)
+                or wheelModel:FindFirstChild("Pneu", true)
             if wheelPart and wheelPart:IsA("BasePart") then
                 table.insert(wheels, wheelPart)
             elseif wheelModel:IsA("BasePart") then
@@ -277,13 +281,19 @@ local function getWheels()
             end
         end
     end
+
+    -- 2. Se não achou nada, procura qualquer BasePart que tenha "Wheel", "Tire", "Pneu" ou "Roda" no nome
     if #wheels == 0 then
         for _, desc in ipairs(car:GetDescendants()) do
-            if desc.Name == "Wheel" and desc:IsA("BasePart") then
-                table.insert(wheels, desc)
+            if desc:IsA("BasePart") then
+                local n = string.lower(desc.Name)
+                if n:find("wheel") or n:find("tire") or n:find("pneu") or n:find("roda") then
+                    table.insert(wheels, desc)
+                end
             end
         end
     end
+
     return wheels
 end
 
