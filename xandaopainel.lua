@@ -343,22 +343,10 @@ local function stopAdhesionLock()
 end
 
 local function applyFOV(value)
-    currentFOV = math.clamp(tonumber(value) or 70, 1, 120)
+    currentFOV = math.clamp(tonumber(value) or 70, 50, 120)
     pcall(function()
         local cam = workspace.CurrentCamera
         if cam then cam.FieldOfView = currentFOV end
-    end)
-end
-
-local function startFOVLock()
-    if fovConn then return end
-    fovConn = RunService.RenderStepped:Connect(function()
-        pcall(function()
-            local cam = workspace.CurrentCamera
-            if cam and math.abs(cam.FieldOfView - currentFOV) > 1 then
-                cam.FieldOfView = currentFOV
-            end
-        end)
     end)
 end
 
@@ -884,5 +872,4 @@ end)
 
 startGravityLock()
 startAdhesionLock()
-startFOVLock()
 applyFOV(currentFOV)
