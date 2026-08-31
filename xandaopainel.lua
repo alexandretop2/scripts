@@ -724,7 +724,7 @@ FOVTab:CreateButton({
 FOVTab:CreateSection("Como usar?")
 FOVTab:CreateParagraph({
    Title = "FOV",
-   Content = "Campo de visão da câmera.\nMínimo: 1° | Máximo: 120° | Padrão: ~70°\nValor travado para o jogo não resetar.",
+   Content = "Campo de visão da câmera.\nMínimo: 50° | Máximo: 120° | Padrão: ~70°\nValor travado para o jogo não resetar.",
 })
 
 -- CONFIGS
