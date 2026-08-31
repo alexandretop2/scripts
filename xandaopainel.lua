@@ -1,18 +1,25 @@
 --[[
-    ⚡ CONTROL HUB - Rayfield Edition (v4)
-    Nitro | Pulo | Pneu (CDT + FApex) | Gravidade | Configs | Ajustes
-    Sistema de configs corrigido + ToggleUIKeybind J
+    ═══════════════════════════════════════════
+    ⚡ PAINEL DO XANDÃO
+    Nitro • Pulo • Gravidade • Velocidade • Configs
+    ───────────────────────────────────────────
+    Desenvolvido por: @alexandretop2
+    Versão: 1.0 | Público
+    ═══════════════════════════════════════════
 ]]
+
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+
 pcall(function()
-    local old = playerGui:FindFirstChild("CustomControlHub")
+    local old = playerGui:FindFirstChild("PainelXandao")
     if old then old:Destroy() end
 end)
+
 -- ─────────────────────────────────────────────
 -- VARIÁVEIS
 -- ─────────────────────────────────────────────
@@ -21,12 +28,14 @@ local nitroKey = Enum.KeyCode.LeftShift
 local jumpKey = Enum.KeyCode.Space
 local isBindingKey = false
 local bindingType = nil
+
 local BOOST_FORCE = 25000
 local JUMP_FORCE = 2000
 local isBoosting = false
 local boostConn = nil
 local activeForce = nil
 local activeAtt = nil
+
 local nitroEnabled = true
 local jumpEnabled = true
 local nitroEffectEnabled = true
@@ -34,36 +43,17 @@ local nitroBtnExists = false
 local jumpBtnExists = false
 local nitroColor1Hex = "#FF5500"
 local nitroColor2Hex = "#FFAA00"
-local MATERIALS = {
-    Enum.Material.Plastic, Enum.Material.SmoothPlastic, Enum.Material.Neon,
-    Enum.Material.ForceField, Enum.Material.Glass, Enum.Material.Metal,
-    Enum.Material.DiamondPlate, Enum.Material.CorrodedMetal, Enum.Material.Foil,
-    Enum.Material.Wood, Enum.Material.WoodPlanks, Enum.Material.Marble,
-    Enum.Material.Slate, Enum.Material.Concrete, Enum.Material.Granite,
-    Enum.Material.Brick, Enum.Material.Pebble, Enum.Material.Cobblestone,
-    Enum.Material.Rock, Enum.Material.Sandstone, Enum.Material.Basalt,
-    Enum.Material.CrackedLava, Enum.Material.Limestone, Enum.Material.Pavement,
-    Enum.Material.Grass, Enum.Material.LeafyGrass, Enum.Material.Sand,
-    Enum.Material.Fabric, Enum.Material.Ice, Enum.Material.Glacier,
-    Enum.Material.Snow, Enum.Material.Mud, Enum.Material.Ground,
-    Enum.Material.Asphalt, Enum.Material.Salt, Enum.Material.Cardboard,
-    Enum.Material.Carpet, Enum.Material.CeramicTiles, Enum.Material.ClayRoofTiles,
-    Enum.Material.Plaster, Enum.Material.Rubber, Enum.Material.RoofShingles,
-}
-local materialIndex = 1
-local originalWheelMaterials = {}
-local tireMode = "CDT" -- "CDT" ou "FApex"
+
 local ORIGINAL_GRAVITY = workspace.Gravity
 local currentGravity = workspace.Gravity
+local gravityLocked = false
+local gravityLockConn = nil
+
 local menuScale = 1
-local stopSpeedLimit, startSpeedLimit, setMaxSpeedEnabled
--- Velocidade máxima
 local maxSpeedEnabled = false
-local MAX_SPEED = 150  -- studs/s
+local MAX_SPEED = 150
 local speedLimitConn = nil
--- Conversor km/h ↔ studs/s
--- Se a velocidade no jogo não bater com o valor digitado, mude STUDS_TO_METERS
--- Exemplos comuns: 0.28 | 0.3 | 0.35 | 0.5 | 1
+
 local STUDS_TO_METERS = 0.28
 local function studsToKmh(studs)
     return (tonumber(studs) or 0) * STUDS_TO_METERS * 3.6
@@ -71,11 +61,12 @@ end
 local function kmhToStuds(kmh)
     return (tonumber(kmh) or 0) / (STUDS_TO_METERS * 3.6)
 end
--- Config system
-local CONFIG_FOLDER = "ControlHub/Configs"
+
+local CONFIG_FOLDER = "PainelXandao/Configs"
 local configs = {}
 local selectedConfigName = nil
-local configNameText = ""  -- armazena o texto do input de nome
+local configNameText = ""
+
 -- ─────────────────────────────────────────────
 -- HELPERS
 -- ─────────────────────────────────────────────
@@ -89,6 +80,7 @@ local function hexToColor3(hex)
     if not r or not g or not b then return nil end
     return Color3.fromRGB(r, g, b)
 end
+
 local function makeDraggable(guiObject)
     local dragging, dragStart, startPos
     guiObject.InputBegan:Connect(function(input)
@@ -119,14 +111,16 @@ local function makeDraggable(guiObject)
         end
     end)
 end
+
 local floatingGui = Instance.new("ScreenGui")
-floatingGui.Name = "CustomControlHub"
+floatingGui.Name = "PainelXandao"
 floatingGui.ResetOnSpawn = false
 floatingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 floatingGui.IgnoreGuiInset = true
 floatingGui.Parent = playerGui
+
 -- ─────────────────────────────────────────────
--- VEHICLE / PARTICLES (ordem correta)
+-- VEÍCULO / PARTÍCULAS
 -- ─────────────────────────────────────────────
 local function getVehicleRoot()
     local char = player.Character
@@ -137,6 +131,7 @@ local function getVehicleRoot()
     if not (seat:IsA("VehicleSeat") or seat:IsA("Seat")) then return nil end
     return seat.AssemblyRootPart or seat
 end
+
 local function getCarModel()
     local root = getVehicleRoot()
     if not root then return nil end
@@ -153,6 +148,7 @@ local function getCarModel()
     end
     return root:FindFirstAncestorOfClass("Model") or root.Parent
 end
+
 local function getNitroParticles()
     local car = getCarModel()
     if not car then return {} end
@@ -172,6 +168,7 @@ local function getNitroParticles()
     end
     return list
 end
+
 local function applyNitroColors()
     local c1 = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0)
     local c2 = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0)
@@ -183,6 +180,7 @@ local function applyNitroColors()
         pe.Color = seq
     end
 end
+
 local function setNitroParticlesEnabled(enabled)
     if not nitroEffectEnabled then enabled = false end
     local particles = getNitroParticles()
@@ -192,6 +190,7 @@ local function setNitroParticlesEnabled(enabled)
     end
     return #particles
 end
+
 local function stopBoost()
     isBoosting = false
     if boostConn then boostConn:Disconnect() boostConn = nil end
@@ -199,6 +198,7 @@ local function stopBoost()
     if activeAtt then pcall(function() activeAtt:Destroy() end) activeAtt = nil end
     setNitroParticlesEnabled(false)
 end
+
 local function startBoost()
     if not nitroEnabled then return false end
     stopBoost()
@@ -229,6 +229,7 @@ local function startBoost()
     end)
     return true
 end
+
 local function applyJump()
     if not jumpEnabled then return false end
     local root = getVehicleRoot()
@@ -236,77 +237,7 @@ local function applyJump()
     root:ApplyImpulse(Vector3.new(0, JUMP_FORCE * 80, 0))
     return true
 end
-local function getWheels()
-    local car = getCarModel()
-    if not car then return {} end
-    local wheels = {}
 
-    if tireMode == "FApex" then
-        -- FApex: Model → Wheels → FR / FL / RR / RL (já são as partes da roda)
-        local wheelsFolder = car:FindFirstChild("Wheels", true)
-        if wheelsFolder then
-            for _, name in ipairs({"FR", "FL", "RR", "RL"}) do
-                local wheel = wheelsFolder:FindFirstChild(name)
-                if wheel then
-                    if wheel:IsA("BasePart") then
-                        table.insert(wheels, wheel)
-                    else
-                        local part = wheel:FindFirstChildWhichIsA("BasePart", true)
-                        if part then
-                            table.insert(wheels, part)
-                        end
-                    end
-                end
-            end
-        end
-    else
-        -- CDT (sistema original)
-        local names = {"FR", "FL", "RR", "RL"}
-        for _, name in ipairs(names) do
-            local wheelModel = car:FindFirstChild(name, true)
-            if wheelModel then
-                local wheelPart = wheelModel:FindFirstChild("Wheel", true)
-                if wheelPart and wheelPart:IsA("BasePart") then
-                    table.insert(wheels, wheelPart)
-                elseif wheelModel:IsA("BasePart") then
-                    table.insert(wheels, wheelModel)
-                end
-            end
-        end
-        if #wheels == 0 then
-            for _, desc in ipairs(car:GetDescendants()) do
-                if desc.Name == "Wheel" and desc:IsA("BasePart") then
-                    table.insert(wheels, desc)
-                end
-            end
-        end
-    end
-
-    return wheels
-end
-local function applyWheelMaterial()
-    local wheels = getWheels()
-    if #wheels == 0 then return 0 end
-    local mat = MATERIALS[materialIndex]
-    for _, w in ipairs(wheels) do
-        if not originalWheelMaterials[w] then
-            originalWheelMaterials[w] = w.Material
-        end
-        w.Material = mat
-    end
-    return #wheels, mat.Name
-end
-local function restoreWheelMaterials()
-    local count = 0
-    for wheel, mat in pairs(originalWheelMaterials) do
-        if wheel and wheel.Parent then
-            wheel.Material = mat
-            count = count + 1
-        end
-    end
-    originalWheelMaterials = {}
-    return count
-end
 local function createFloatingButton(name, text, color, callback, isHold)
     local old = floatingGui:FindFirstChild(name)
     if old then old:Destroy() end
@@ -349,18 +280,85 @@ local function createFloatingButton(name, text, color, callback, isHold)
     end
     return btn
 end
+
 -- ─────────────────────────────────────────────
--- SISTEMA DE CONFIGS (corrigido)
+-- GRAVIDADE (com trava anti-reset)
+-- ─────────────────────────────────────────────
+local function stopGravityLock()
+    if gravityLockConn then
+        gravityLockConn:Disconnect()
+        gravityLockConn = nil
+    end
+end
+
+local function startGravityLock()
+    stopGravityLock()
+    if not gravityLocked then return end
+    gravityLockConn = RunService.Heartbeat:Connect(function()
+        if not gravityLocked then return end
+        if workspace.Gravity ~= currentGravity then
+            workspace.Gravity = currentGravity
+        end
+    end)
+end
+
+local function setGravityLocked(value)
+    gravityLocked = value
+    if value then
+        startGravityLock()
+    else
+        stopGravityLock()
+    end
+end
+
+-- ─────────────────────────────────────────────
+-- VELOCIDADE MÁXIMA
+-- ─────────────────────────────────────────────
+local function stopSpeedLimit()
+    if speedLimitConn then
+        speedLimitConn:Disconnect()
+        speedLimitConn = nil
+    end
+end
+
+local function startSpeedLimit()
+    stopSpeedLimit()
+    if not maxSpeedEnabled then return end
+    speedLimitConn = RunService.Heartbeat:Connect(function()
+        if not maxSpeedEnabled then return end
+        local root = getVehicleRoot()
+        if not root then return end
+        local vel = root.AssemblyLinearVelocity
+        local speed = vel.Magnitude
+        if speed > MAX_SPEED and speed > 0.1 then
+            root.AssemblyLinearVelocity = vel.Unit * MAX_SPEED
+        end
+    end)
+end
+
+local function setMaxSpeedEnabled(value)
+    maxSpeedEnabled = value
+    if value then
+        startSpeedLimit()
+    else
+        stopSpeedLimit()
+    end
+end
+
+-- ─────────────────────────────────────────────
+-- SISTEMA DE CONFIGS
 -- ─────────────────────────────────────────────
 local function ensureFolder()
     pcall(function()
-        if isfolder and not isfolder("ControlHub") then makefolder("ControlHub") end
+        if isfolder and not isfolder("PainelXandao") then makefolder("PainelXandao") end
         if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
     end)
 end
+
 local function getConfigPath(name)
     return CONFIG_FOLDER .. "/" .. name .. ".json"
 end
+
 local function timeAgo(timestamp)
     local diff = os.time() - (tonumber(timestamp) or os.time())
     if diff < 60 then return "agora"
@@ -369,6 +367,7 @@ local function timeAgo(timestamp)
     else return math.floor(diff / 86400) .. " dias atrás"
     end
 end
+
 local function loadAllConfigs()
     configs = {}
     ensureFolder()
@@ -394,6 +393,7 @@ local function loadAllConfigs()
         end
     end
 end
+
 local function saveConfigToFile(name, data)
     ensureFolder()
     local ok, err = pcall(function()
@@ -401,12 +401,14 @@ local function saveConfigToFile(name, data)
     end)
     return ok, err
 end
+
 local function deleteConfigFile(name)
     pcall(function()
         if delfile then delfile(getConfigPath(name)) end
     end)
     configs[name] = nil
 end
+
 local function getCurrentSettings()
     return {
         name = "",
@@ -414,34 +416,35 @@ local function getCurrentSettings()
         nitroForce = BOOST_FORCE,
         jumpForce = JUMP_FORCE,
         gravity = currentGravity,
+        gravityLocked = gravityLocked,
         nitroColor1 = nitroColor1Hex,
         nitroColor2 = nitroColor2Hex,
         nitroEnabled = nitroEnabled,
         jumpEnabled = jumpEnabled,
         nitroEffect = nitroEffectEnabled,
-        materialIndex = materialIndex,
-        tireMode = tireMode,
         menuScale = menuScale,
         nitroKey = nitroKey.Name,
         jumpKey = jumpKey.Name,
         menuKey = menuKey.Name,
     }
 end
+
+local ui = {}
+local nitroKeyBtn, jumpKeyBtn, menuKeyBtn
+local configDropdown, configInfoLabel
+
 local function applySettings(data)
     if type(data) ~= "table" then return false end
     BOOST_FORCE = tonumber(data.nitroForce) or BOOST_FORCE
     JUMP_FORCE = tonumber(data.jumpForce) or JUMP_FORCE
     currentGravity = tonumber(data.gravity) or currentGravity
     workspace.Gravity = currentGravity
+    setGravityLocked(data.gravityLocked == true)
     nitroColor1Hex = data.nitroColor1 or nitroColor1Hex
     nitroColor2Hex = data.nitroColor2 or nitroColor2Hex
     nitroEnabled = data.nitroEnabled ~= false
     jumpEnabled = data.jumpEnabled ~= false
     nitroEffectEnabled = data.nitroEffect ~= false
-    materialIndex = tonumber(data.materialIndex) or materialIndex
-    if materialIndex < 1 or materialIndex > #MATERIALS then materialIndex = 1 end
-    tireMode = data.tireMode or "CDT"
-    if tireMode ~= "CDT" and tireMode ~= "FApex" then tireMode = "CDT" end
     menuScale = tonumber(data.menuScale) or 1
     pcall(function()
         if data.nitroKey and Enum.KeyCode[data.nitroKey] then
@@ -455,7 +458,6 @@ local function applySettings(data)
         end
     end)
     applyNitroColors()
-    -- Atualiza os elementos visuais do Rayfield
     pcall(function()
         if ui.nitroToggle then ui.nitroToggle:Set(nitroEnabled) end
         if ui.nitroEffectToggle then ui.nitroEffectToggle:Set(nitroEffectEnabled) end
@@ -470,19 +472,13 @@ local function applySettings(data)
         end
         if ui.jumpToggle then ui.jumpToggle:Set(jumpEnabled) end
         if ui.jumpForceInput then ui.jumpForceInput:Set(tostring(JUMP_FORCE)) end
-        if ui.tireModeDropdown then
-            ui.tireModeDropdown:Set({tireMode})
-        end
-        if ui.materialDropdown then
-            ui.materialDropdown:Set({MATERIALS[materialIndex].Name})
-        end
         if ui.gravitySlider then ui.gravitySlider:Set(currentGravity) end
+        if ui.gravityLockToggle then ui.gravityLockToggle:Set(gravityLocked) end
         if ui.menuScaleSlider then ui.menuScaleSlider:Set(menuScale) end
         if nitroKeyBtn then nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end
         if jumpKeyBtn then jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end
-        if menuKeyBtn then menuKeyBtn:Set("⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]") end
+        if menuKeyBtn then menuKeyBtn:Set("⌨️ Tecla Menu: [" .. menuKey.Name .. "]") end
     end)
-    -- aplica escala do menu
     pcall(function()
         for _, gui in ipairs({game:GetService("CoreGui"), playerGui}) do
             local rf = gui:FindFirstChild("Rayfield") or gui:FindFirstChild("RayfieldLibrary")
@@ -497,6 +493,7 @@ local function applySettings(data)
     end)
     return true
 end
+
 local function getConfigNames()
     local names = {}
     for name in pairs(configs) do
@@ -505,80 +502,31 @@ local function getConfigNames()
     table.sort(names)
     return names
 end
--- ─────────────────────────────────────────────
--- VELOCIDADE MÁXIMA
--- ─────────────────────────────────────────────
-function stopSpeedLimit()
-    if speedLimitConn then
-        speedLimitConn:Disconnect()
-        speedLimitConn = nil
-    end
-end
-function startSpeedLimit()
-    stopSpeedLimit()
-    if not maxSpeedEnabled then return end
-    speedLimitConn = RunService.Heartbeat:Connect(function()
-        if not maxSpeedEnabled then return end
-        local root = getVehicleRoot()
-        if not root then return end
-        local vel = root.AssemblyLinearVelocity
-        local speed = vel.Magnitude
-        if speed > MAX_SPEED and speed > 0.1 then
-            root.AssemblyLinearVelocity = vel.Unit * MAX_SPEED
-        end
-    end)
-end
-function setMaxSpeedEnabled(value)
-    maxSpeedEnabled = value
-    if value then
-        startSpeedLimit()
-    else
-        stopSpeedLimit()
-    end
-end
+
 -- ─────────────────────────────────────────────
 -- RAYFIELD UI
 -- ─────────────────────────────────────────────
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
 local Window = Rayfield:CreateWindow({
-   Name = "⚡ CONTROL HUB",
+   Name = "⚡ Painel do Xandão",
    Icon = 0,
-   LoadingTitle = "Control Hub",
-   LoadingSubtitle = "Nitro | Pulo | Pneu | Velocidade | Gravidade | Configs",
-   ShowText = "Control Hub",
+   LoadingTitle = "Painel do Xandão",
+   LoadingSubtitle = "by @alexandretop2",
+   ShowText = "Xandão",
    Theme = "Default",
    ToggleUIKeybind = "J",
    DisableRayfieldPrompts = false,
    DisableBuildWarnings = false,
    ConfigurationSaving = {
       Enabled = true,
-      FolderName = "ControlHub",
+      FolderName = "PainelXandao",
       FileName = "AutoConfig"
    },
    Discord = { Enabled = false },
    KeySystem = false,
 })
-local nitroKeyBtn, jumpKeyBtn, menuKeyBtn
-local configDropdown, configInfoLabel
--- Referências dos elementos para atualizar ao carregar config
-local ui = {
-    nitroToggle = nil,
-    nitroEffectToggle = nil,
-    nitroForceInput = nil,
-    nitroColor1 = nil,
-    nitroColor2 = nil,
-    jumpToggle = nil,
-    jumpForceInput = nil,
-    tireModeDropdown = nil,
-    materialDropdown = nil,
-    gravitySlider = nil,
-    menuScaleSlider = nil,
-    maxSpeedToggle = nil,
-    maxSpeedKmhInput = nil,
-    convertKmhOnly = nil,
-    convertStudsResult = nil,
-    convertKmhResult = nil,
-}
+
 local function updateConfigInfo(name)
     if not configInfoLabel then return end
     local data = name and configs[name]
@@ -592,11 +540,12 @@ local function updateConfigInfo(name)
         return
     end
     local text = string.format(
-        "Criada: %s\nNitro: %s\nPulo: %s\nGravidade: %s\nCores: %s / %s\nTeclas: %s | %s",
+        "Criada: %s\nNitro: %s  |  Pulo: %s\nGravidade: %s  |  Trava: %s\nCores: %s / %s\nTeclas: %s | %s",
         timeAgo(data.created),
         tostring(data.nitroForce or "?"),
         tostring(data.jumpForce or "?"),
         tostring(data.gravity or "?"),
+        data.gravityLocked and "ON" or "OFF",
         tostring(data.nitroColor1 or "?"),
         tostring(data.nitroColor2 or "?"),
         tostring(data.nitroKey or "?"),
@@ -609,6 +558,7 @@ local function updateConfigInfo(name)
         })
     end)
 end
+
 local function refreshConfigList(preferName)
     loadAllConfigs()
     local names = getConfigNames()
@@ -619,7 +569,6 @@ local function refreshConfigList(preferName)
         if preferName and configs[preferName] then
             selectedConfigName = preferName
         elseif selectedConfigName and configs[selectedConfigName] then
-            -- mantém a seleção atual
         else
             selectedConfigName = names[1]
         end
@@ -635,17 +584,19 @@ local function refreshConfigList(preferName)
     updateConfigInfo(selectedConfigName)
     return names
 end
+
 -- ==================== TAB NITRO ====================
 local NitroTab = Window:CreateTab("⚡ Nitro", 4483362458)
+
 NitroTab:CreateSection("Sistema")
 ui.nitroToggle = NitroTab:CreateToggle({
-   Name = "Ativar Sistema de Nitro",
+   Name = "Ativar Nitro",
    CurrentValue = true,
    Flag = "NitroSystem",
    Callback = function(Value)
       nitroEnabled = Value
       if not Value then stopBoost() end
-end,
+   end,
 })
 ui.nitroEffectToggle = NitroTab:CreateToggle({
    Name = "Efeito de Partículas (NitroFire)",
@@ -654,11 +605,12 @@ ui.nitroEffectToggle = NitroTab:CreateToggle({
    Callback = function(Value)
       nitroEffectEnabled = Value
       if not Value then setNitroParticlesEnabled(false) end
-end,
+   end,
 })
-NitroTab:CreateSection("Força do Nitro")
+
+NitroTab:CreateSection("Força")
 ui.nitroForceInput = NitroTab:CreateInput({
-   Name = "Força do Nitro (100 - 1M)",
+   Name = "Força do Nitro (100 - 1.000.000)",
    CurrentValue = tostring(BOOST_FORCE),
    PlaceholderText = "25000",
    RemoveTextAfterFocusLost = false,
@@ -667,12 +619,13 @@ ui.nitroForceInput = NitroTab:CreateInput({
       local v = tonumber(Text)
       if v then
          BOOST_FORCE = math.clamp(v, 100, 1000000)
-end
+      end
    end,
 })
+
 NitroTab:CreateSection("Cores das Partículas")
 ui.nitroColor1 = NitroTab:CreateColorPicker({
-   Name = "Cor Nitro 1 (preview)",
+   Name = "Cor Primária",
    Color = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0),
    Flag = "NitroColor1",
    Callback = function(Value)
@@ -684,7 +637,7 @@ ui.nitroColor1 = NitroTab:CreateColorPicker({
    end,
 })
 ui.nitroColor2 = NitroTab:CreateColorPicker({
-   Name = "Cor Nitro 2 (preview)",
+   Name = "Cor Secundária",
    Color = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0),
    Flag = "NitroColor2",
    Callback = function(Value)
@@ -695,45 +648,45 @@ ui.nitroColor2 = NitroTab:CreateColorPicker({
       applyNitroColors()
    end,
 })
-NitroTab:CreateSection("Botões e Teclas")
+
+NitroTab:CreateSection("Controles")
 NitroTab:CreateButton({
-   Name = "📌 Criar / Remover Botão de Nitro",
+   Name = "📌 Criar / Remover Botão Flutuante",
    Callback = function()
       if nitroBtnExists then
          local old = floatingGui:FindFirstChild("FloatingNitro")
          if old then old:Destroy() end
          nitroBtnExists = false
-else
+      else
          createFloatingButton("FloatingNitro", "⚡", Color3.fromRGB(230, 120, 0), function(state)
-            if state then
-               local ok = startBoost()
-            else
-               stopBoost()
-            end
+            if state then startBoost() else stopBoost() end
          end, true)
          nitroBtnExists = true
-end
+      end
    end,
 })
 nitroKeyBtn = NitroTab:CreateButton({
    Name = "⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]",
    Callback = function()
-isBindingKey = true
+      isBindingKey = true
       bindingType = "nitro"
    end,
 })
+
 -- ==================== TAB PULO ====================
 local JumpTab = Window:CreateTab("🦘 Pulo", 4483362458)
+
 JumpTab:CreateSection("Sistema")
 ui.jumpToggle = JumpTab:CreateToggle({
-   Name = "Ativar Sistema de Pulo",
+   Name = "Ativar Pulo",
    CurrentValue = true,
    Flag = "JumpSystem",
    Callback = function(Value)
       jumpEnabled = Value
-end,
+   end,
 })
-JumpTab:CreateSection("Poder do Pulo")
+
+JumpTab:CreateSection("Força")
 ui.jumpForceInput = JumpTab:CreateInput({
    Name = "Poder do Pulo (0 - 5000)",
    CurrentValue = tostring(JUMP_FORCE),
@@ -744,98 +697,49 @@ ui.jumpForceInput = JumpTab:CreateInput({
       local v = tonumber(Text)
       if v then
          JUMP_FORCE = math.clamp(v, 0, 5000)
-end
+      end
    end,
 })
-JumpTab:CreateSection("Botões e Teclas")
+
+JumpTab:CreateSection("Controles")
 JumpTab:CreateButton({
-   Name = "📌 Criar / Remover Botão de Pulo",
+   Name = "📌 Criar / Remover Botão Flutuante",
    Callback = function()
       if jumpBtnExists then
          local old = floatingGui:FindFirstChild("FloatingJump")
          if old then old:Destroy() end
          jumpBtnExists = false
-else
+      else
          createFloatingButton("FloatingJump", "🦘", Color3.fromRGB(0, 150, 220), function()
-            local ok = applyJump()
-            if not ok then
-end
+            applyJump()
          end, false)
          jumpBtnExists = true
-end
+      end
    end,
 })
 jumpKeyBtn = JumpTab:CreateButton({
    Name = "⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]",
    Callback = function()
-isBindingKey = true
+      isBindingKey = true
       bindingType = "jump"
    end,
 })
--- ==================== TAB PNEU ====================
-local PneuTab = Window:CreateTab("🛞 Pneu", 4483362458)
 
-PneuTab:CreateSection("Jogo")
-ui.tireModeDropdown = PneuTab:CreateDropdown({
-   Name = "Sistema de Pneu",
-   Options = {"CDT", "FApex"},
-   CurrentOption = {tireMode},
-   MultipleOptions = false,
-   Flag = "TireMode",
-   Callback = function(Option)
-      local selected = type(Option) == "table" and (Option[1] or Option.Name) or Option
-      if selected == "CDT" or selected == "FApex" then
-         tireMode = selected
-      end
-   end,
-})
-
-PneuTab:CreateSection("Material do Pneu")
-local materialOptions = {}
-for _, mat in ipairs(MATERIALS) do
-   table.insert(materialOptions, mat.Name)
-end
-ui.materialDropdown = PneuTab:CreateDropdown({
-   Name = "Escolher Material",
-   Options = materialOptions,
-   CurrentOption = {MATERIALS[materialIndex].Name},
-   MultipleOptions = false,
-   Flag = "WheelMaterial",
-   Callback = function(Option)
-      local selected = type(Option) == "table" and (Option[1] or Option.Name) or Option
-      for i, mat in ipairs(MATERIALS) do
-         if mat.Name == selected then
-            materialIndex = i
-            break
-         end
-      end
-   end,
-})
-PneuTab:CreateButton({
-   Name = "✅ Aplicar Material nas Rodas",
-   Callback = function()
-      local count, matName = applyWheelMaterial()
-      if count > 0 then
-end
-   end,
-})
-PneuTab:CreateButton({
-   Name = "↩️ Voltar Material Original",
-   Callback = function()
-      local count = restoreWheelMaterials()
-      if count > 0 then
-end
-   end,
-})
-PneuTab:CreateParagraph({
-   Title = "Como funciona",
-   Content = "CDT → procura FR/FL/RR/RL → Wheel\nFApex → procura Wheels → FR/FL/RR/RL (já é a parte)\n\nEntre no veículo e clique Aplicar.\nO botão \"Voltar Original\" restaura o material anterior."
-})
 -- ==================== TAB GRAVIDADE ====================
 local GravityTab = Window:CreateTab("🌍 Gravidade", 4483362458)
-GravityTab:CreateSection("Controle de Gravidade")
+
+GravityTab:CreateSection("Controle")
+ui.gravityLockToggle = GravityTab:CreateToggle({
+   Name = "🔒 Travar Gravidade (anti-reset)",
+   CurrentValue = false,
+   Flag = "GravityLock",
+   Callback = function(Value)
+      setGravityLocked(Value)
+   end,
+})
+
 ui.gravitySlider = GravityTab:CreateSlider({
-   Name = "Gravidade",
+   Name = "Valor da Gravidade",
    Range = {0, 500},
    Increment = 1,
    Suffix = "",
@@ -846,24 +750,28 @@ ui.gravitySlider = GravityTab:CreateSlider({
       workspace.Gravity = Value
    end,
 })
+
 GravityTab:CreateButton({
-   Name = "↩️ Resetar Gravidade (Original do Jogo)",
+   Name = "↩️ Restaurar Gravidade Original",
    Callback = function()
-      workspace.Gravity = ORIGINAL_GRAVITY
       currentGravity = ORIGINAL_GRAVITY
-end,
+      workspace.Gravity = ORIGINAL_GRAVITY
+      if ui.gravitySlider then ui.gravitySlider:Set(ORIGINAL_GRAVITY) end
+   end,
 })
+
 GravityTab:CreateParagraph({
-   Title = "Info",
-   Content = "Gravidade original do jogo: " .. tostring(ORIGINAL_GRAVITY) .. "\nMínimo: 0 | Máximo: 500"
+   Title = "Informação",
+   Content = "Gravidade original: " .. tostring(ORIGINAL_GRAVITY) .. "\n\nSe o jogo resetar o valor sozinho, ative a trava.\nO script forçará a gravidade a cada frame."
 })
+
 -- ==================== TAB VELOCIDADE ====================
 local SpeedTab = Window:CreateTab("🏎️ Velocidade", 4483362458)
--- valor que o usuário vê/edita em km/h
 local maxSpeedKmh = studsToKmh(MAX_SPEED)
+
 SpeedTab:CreateSection("Limite de Velocidade")
 ui.maxSpeedToggle = SpeedTab:CreateToggle({
-   Name = "Ativar Limite de Velocidade",
+   Name = "Ativar Limite",
    CurrentValue = false,
    Flag = "MaxSpeedEnabled",
    Callback = function(Value)
@@ -884,13 +792,15 @@ ui.maxSpeedKmhInput = SpeedTab:CreateInput({
       MAX_SPEED = kmhToStuds(kmh)
    end,
 })
+
 SpeedTab:CreateParagraph({
    Title = "Como funciona",
-   Content = "Digite a velocidade em km/h e ative o toggle.\nO script converte automaticamente para studs/s e limita o veículo.\n\nProporção atual: 1 stud = " .. tostring(STUDS_TO_METERS) .. " m\n(edite STUDS_TO_METERS no script se a velocidade no jogo não bater)"
+   Content = "Digite a velocidade em km/h e ative o toggle.\nConversão automática para studs/s.\n\nProporção: 1 stud = " .. tostring(STUDS_TO_METERS) .. " m\n(edite STUDS_TO_METERS no script se necessário)"
 })
-SpeedTab:CreateSection("Conversor rápido")
+
+SpeedTab:CreateSection("Conversor")
 ui.convertKmhOnly = SpeedTab:CreateInput({
-   Name = "km/h → ver em studs/s",
+   Name = "km/h → studs/s",
    CurrentValue = "",
    PlaceholderText = "Digite km/h",
    RemoveTextAfterFocusLost = false,
@@ -915,7 +825,7 @@ ui.convertStudsResult = SpeedTab:CreateInput({
    Callback = function() end,
 })
 SpeedTab:CreateInput({
-   Name = "studs/s → ver em km/h",
+   Name = "studs/s → km/h",
    CurrentValue = "",
    PlaceholderText = "Digite studs/s",
    RemoveTextAfterFocusLost = false,
@@ -939,13 +849,15 @@ ui.convertKmhResult = SpeedTab:CreateInput({
    Flag = "ConvertKmhResult",
    Callback = function() end,
 })
--- ==================== TAB CONFIGS (CORRIGIDA) ====================
+
+-- ==================== TAB CONFIGS ====================
 local ConfigsTab = Window:CreateTab("💾 Configs", 4483362458)
-ConfigsTab:CreateSection("Salvar Nova Config")
+
+ConfigsTab:CreateSection("Salvar")
 ConfigsTab:CreateInput({
    Name = "Nome da Config",
    CurrentValue = "",
-   PlaceholderText = "Ex: MinhaSetup",
+   PlaceholderText = "Ex: SetupDrift",
    RemoveTextAfterFocusLost = false,
    Flag = "ConfigNameInput",
    Callback = function(Text)
@@ -957,13 +869,12 @@ ConfigsTab:CreateButton({
    Callback = function()
       local name = configNameText
       if name == "" or name == "(nenhuma config)" then return end
-      -- remove caracteres problemáticos
       name = name:gsub("[/\\:*?\"<>|]", "")
       if name == "" then return end
       local data = getCurrentSettings()
       data.name = name
       data.created = os.time()
-      local ok, err = saveConfigToFile(name, data)
+      local ok = saveConfigToFile(name, data)
       if ok then
          configs[name] = data
          selectedConfigName = name
@@ -971,6 +882,7 @@ ConfigsTab:CreateButton({
       end
    end,
 })
+
 ConfigsTab:CreateSection("Configs Salvas")
 loadAllConfigs()
 local initialNames = getConfigNames()
@@ -979,6 +891,7 @@ if #initialNames == 0 then
 else
     selectedConfigName = initialNames[1]
 end
+
 configDropdown = ConfigsTab:CreateDropdown({
    Name = "Selecionar Config",
    Options = initialNames,
@@ -1002,23 +915,23 @@ configDropdown = ConfigsTab:CreateDropdown({
       end
    end,
 })
+
 configInfoLabel = ConfigsTab:CreateParagraph({
    Title = selectedConfigName or "Nenhuma config selecionada",
-   Content = selectedConfigName and "Carregando info..." or "Salve ou selecione uma config na lista"
+   Content = selectedConfigName and "Carregando..." or "Salve ou selecione uma config"
 })
--- atualiza info inicial
+
 task.defer(function()
     updateConfigInfo(selectedConfigName)
 end)
+
 ConfigsTab:CreateSection("Ações")
 ConfigsTab:CreateButton({
    Name = "📂 Carregar Config",
    Callback = function()
       if not selectedConfigName or not configs[selectedConfigName] then
          local names = getConfigNames()
-         if #names > 0 then
-            selectedConfigName = names[1]
-         end
+         if #names > 0 then selectedConfigName = names[1] end
       end
       if not selectedConfigName or not configs[selectedConfigName] then return end
       applySettings(configs[selectedConfigName])
@@ -1057,8 +970,7 @@ ConfigsTab:CreateButton({
    Name = "🗑️ Apagar Config",
    Callback = function()
       if not selectedConfigName or not configs[selectedConfigName] then return end
-      local name = selectedConfigName
-      deleteConfigFile(name)
+      deleteConfigFile(selectedConfigName)
       selectedConfigName = nil
       refreshConfigList()
    end,
@@ -1069,21 +981,24 @@ ConfigsTab:CreateButton({
       refreshConfigList()
    end,
 })
+
 -- ==================== TAB AJUSTES ====================
 local SettingsTab = Window:CreateTab("⚙️ Ajustes", 4483362458)
-SettingsTab:CreateSection("Tecla do Menu")
+
+SettingsTab:CreateSection("Teclas")
 SettingsTab:CreateParagraph({
-   Title = "ToggleUIKeybind",
-   Content = "Tecla padrão para abrir/fechar o menu: J\n(nativo do Rayfield)"
+   Title = "Menu Principal",
+   Content = "Tecla padrão para abrir/fechar: J\n(nativo do Rayfield)"
 })
 menuKeyBtn = SettingsTab:CreateButton({
    Name = "⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]",
    Callback = function()
-isBindingKey = true
+      isBindingKey = true
       bindingType = "menu"
    end,
 })
-SettingsTab:CreateSection("Tamanho do Menu")
+
+SettingsTab:CreateSection("Interface")
 ui.menuScaleSlider = SettingsTab:CreateSlider({
    Name = "Escala do Menu",
    Range = {0.5, 2},
@@ -1107,10 +1022,28 @@ ui.menuScaleSlider = SettingsTab:CreateSlider({
       end)
    end,
 })
-SettingsTab:CreateParagraph({
-   Title = "Informações",
-   Content = "• Nitro: força + partículas NitroFire\n• Cores: seletor visual\n• Pneu: CDT / FApex\n• Menu: tecla J\n• Configs: pasta ControlHub/Configs\n• Precisa de writefile/readfile no executor"
+
+-- ==================== TAB CRÉDITOS ====================
+local CreditsTab = Window:CreateTab("👑 Créditos", 4483362458)
+
+CreditsTab:CreateSection("Desenvolvedor")
+CreditsTab:CreateParagraph({
+   Title = "Painel do Xandão",
+   Content = "Desenvolvido por @alexandretop2\n\nVersão 1.0 — Uso público\nObrigado por utilizar!"
 })
+
+CreditsTab:CreateSection("Recursos")
+CreditsTab:CreateParagraph({
+   Title = "O que o painel oferece",
+   Content = "• Nitro com força e cores personalizáveis\n• Sistema de pulo configurável\n• Gravidade com trava anti-reset\n• Limite de velocidade (km/h)\n• Sistema de configs salvas\n• Botões flutuantes e teclas customizáveis"
+})
+
+CreditsTab:CreateSection("Contato")
+CreditsTab:CreateParagraph({
+   Title = "Créditos",
+   Content = "Criado e mantido por:\n@alexandretop2\n\nNão remova os créditos.\nDivulgue com respeito."
+})
+
 -- ─────────────────────────────────────────────
 -- INPUT
 -- ─────────────────────────────────────────────
@@ -1140,11 +1073,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         applyJump()
     end
 end)
+
 UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == nitroKey then
         stopBoost()
     end
 end)
+
 task.spawn(function()
     task.wait(0.8)
     refreshConfigList()
