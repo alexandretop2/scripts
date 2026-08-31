@@ -343,20 +343,10 @@ local function stopAdhesionLock()
 end
 
 local function applyFOV(value)
-    currentFOV = math.clamp(tonumber(value) or 70, 50, 120)[cite: 1]
-    
-    -- Desconecta o loop antigo se existir
-    if fovConn then 
-        fovConn:Disconnect() 
-        fovConn = nil
-    end
-    
-    -- Força o FOV todo frame (RenderStepped roda antes da câmera desenhar a tela)
-    fovConn = RunService.RenderStepped:Connect(function()
+    currentFOV = math.clamp(tonumber(value) or 70, 50, 120)
+    pcall(function()
         local cam = workspace.CurrentCamera
-        if cam then
-            cam.FieldOfView = currentFOV
-        end
+        if cam then cam.FieldOfView = currentFOV end
     end)
 end
 
@@ -734,7 +724,7 @@ FOVTab:CreateButton({
 FOVTab:CreateSection("Como usar?")
 FOVTab:CreateParagraph({
    Title = "FOV",
-   Content = "Campo de visão da câmera.\nMínimo: 50° | Máximo: 120° | Padrão: ~70°\nValor travado para o jogo não resetar.",
+   Content = "Campo de visão da câmera.\nMínimo: 1° | Máximo: 120° | Padrão: ~70°\nValor travado para o jogo não resetar.",
 })
 
 -- CONFIGS
