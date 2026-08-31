@@ -352,10 +352,10 @@ end
 
 local function startFOVLock()
     if fovConn then return end
-    fovConn = RunService.Heartbeat:Connect(function()
+    fovConn = RunService.RenderStepped:Connect(function()
         pcall(function()
             local cam = workspace.CurrentCamera
-            if cam and math.abs(cam.FieldOfView - currentFOV) > 0.1 then
+            if cam and math.abs(cam.FieldOfView - currentFOV) > 1 then
                 cam.FieldOfView = currentFOV
             end
         end)
