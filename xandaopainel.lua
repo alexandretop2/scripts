@@ -343,10 +343,22 @@ local function stopAdhesionLock()
 end
 
 local function applyFOV(value)
-    currentFOV = math.clamp(tonumber(value) or 70, 50, 120)
+    currentFOV = math.clamp(tonumber(value) or 70, 1, 120)
     pcall(function()
         local cam = workspace.CurrentCamera
         if cam then cam.FieldOfView = currentFOV end
+    end)
+end
+
+local function startFOVLock()
+    if fovConn then return end
+    fovConn = RunService.Heartbeat:Connect(function()
+        pcall(function()
+            local cam = workspace.CurrentCamera
+            if cam and math.abs(cam.FieldOfView - currentFOV) > 0.1 then
+                cam.FieldOfView = currentFOV
+            end
+        end)
     end)
 end
 
@@ -710,7 +722,7 @@ AdhesionTab:CreateParagraph({
 local FOVTab = Window:CreateTab("📷 FOV", 4483362458)
 FOVTab:CreateSection("Campo de Visão")
 ui.fovSlider = FOVTab:CreateSlider({
-   Name = "FOV", Range = {50, 120}, Increment = 1, Suffix = "°",
+   Name = "FOV", Range = {1, 120}, Increment = 1, Suffix = "°",
    CurrentValue = math.clamp(ORIGINAL_FOV, 1, 120), Flag = "FOV",
    Callback = function(Value) applyFOV(Value) end,
 })
@@ -872,4 +884,5 @@ end)
 
 startGravityLock()
 startAdhesionLock()
+startFOVLock()
 applyFOV(currentFOV)
