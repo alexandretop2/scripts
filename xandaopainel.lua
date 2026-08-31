@@ -343,10 +343,20 @@ local function stopAdhesionLock()
 end
 
 local function applyFOV(value)
-    currentFOV = math.clamp(tonumber(value) or 70, 50, 120)
-    pcall(function()
+    currentFOV = math.clamp(tonumber(value) or 70, 50, 120)[cite: 1]
+    
+    -- Desconecta o loop antigo se existir
+    if fovConn then 
+        fovConn:Disconnect() 
+        fovConn = nil
+    end
+    
+    -- Força o FOV todo frame (RenderStepped roda antes da câmera desenhar a tela)
+    fovConn = RunService.RenderStepped:Connect(function()
         local cam = workspace.CurrentCamera
-        if cam then cam.FieldOfView = currentFOV end
+        if cam then
+            cam.FieldOfView = currentFOV
+        end
     end)
 end
 
