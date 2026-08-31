@@ -1,10 +1,10 @@
 --[[
     ═══════════════════════════════════════════
     ⚡ PAINEL DO XANDÃO
-    Nitro • Pulo • Gravidade • Aderência • Configs
+    Nitro • Pulo • Gravidade • Aderência • FOV • Configs
     ───────────────────────────────────────────
-    Desenvolvido por: @alexandretop2
-    Versão: 1.1 | Público
+    Desenvolvido por: Xandão
+    Versão: 1.2 | Público
     ═══════════════════════════════════════════
 ]]
 
@@ -21,23 +21,23 @@ pcall(function()
 end)
 
 -- ─────────────────────────────────────────────
--- VARIÁVEIS
+-- 1. SETUP
 -- ─────────────────────────────────────────────
 local menuKey = Enum.KeyCode.J
 local nitroKey = Enum.KeyCode.LeftShift
-local jumpKey = Enum.KeyCode.Space
+local jumpKey = Enum.KeyCode.LeftControl
 local isBindingKey = false
 local bindingType = nil
 
-local BOOST_FORCE = 25000
-local JUMP_FORCE = 2000
+local BOOST_FORCE = 1000
+local JUMP_FORCE = 50
 local isBoosting = false
 local boostConn = nil
 local activeForce = nil
 local activeAtt = nil
 
 local nitroEnabled = true
-local jumpEnabled = true
+local jumpEnabled = false
 local nitroEffectEnabled = true
 local nitroBtnExists = false
 local jumpBtnExists = false
@@ -48,18 +48,22 @@ local ORIGINAL_GRAVITY = workspace.Gravity
 local currentGravity = workspace.Gravity
 local gravityLockConn = nil
 
--- Aderência (friction)
 local currentFriction = 1.0
 local adhesionEnabled = true
 local adhesionConn = nil
 local originalWheelPhys = {}
 
-local menuScale = 1
+local ORIGINAL_FOV = 70
+pcall(function()
+    if workspace.CurrentCamera then
+        ORIGINAL_FOV = workspace.CurrentCamera.FieldOfView
+    end
+end)
+local currentFOV = ORIGINAL_FOV
+local fovConn = nil
 
-local CONFIG_FOLDER = "PainelXandao/Configs"
-local configs = {}
-local selectedConfigName = nil
-local configNameText = ""
+local menuScale = 1
+local importCodeText = ""
 
 local ADHESION_PRESETS = {
     ["Drift"] = 0.35,
@@ -67,9 +71,6 @@ local ADHESION_PRESETS = {
     ["Sem Aderência"] = 0.05,
 }
 
--- ─────────────────────────────────────────────
--- HELPERS
--- ─────────────────────────────────────────────
 local function hexToColor3(hex)
     if type(hex) ~= "string" then return nil end
     hex = hex:gsub("#", ""):gsub("%s", "")
@@ -120,7 +121,7 @@ floatingGui.IgnoreGuiInset = true
 floatingGui.Parent = playerGui
 
 -- ─────────────────────────────────────────────
--- VEÍCULO / PARTÍCULAS
+-- 2. VEÍCULO
 -- ─────────────────────────────────────────────
 local function getVehicleRoot()
     local char = player.Character
@@ -149,6 +150,32 @@ local function getCarModel()
     return root:FindFirstAncestorOfClass("Model") or root.Parent
 end
 
+local function getWheels()
+    local car = getCarModel()
+    if not car then return {} end
+    local wheels = {}
+    local names = {"FR", "FL", "RR", "RL"}
+    for _, name in ipairs(names) do
+        local wheelModel = car:FindFirstChild(name, true)
+        if wheelModel then
+            local wheelPart = wheelModel:FindFirstChild("Wheel", true)
+            if wheelPart and wheelPart:IsA("BasePart") then
+                table.insert(wheels, wheelPart)
+            elseif wheelModel:IsA("BasePart") then
+                table.insert(wheels, wheelModel)
+            end
+        end
+    end
+    if #wheels == 0 then
+        for _, desc in ipairs(car:GetDescendants()) do
+            if desc.Name == "Wheel" and desc:IsA("BasePart") then
+                table.insert(wheels, desc)
+            end
+        end
+    end
+    return wheels
+end
+
 local function getNitroParticles()
     local car = getCarModel()
     if not car then return {} end
@@ -169,6 +196,9 @@ local function getNitroParticles()
     return list
 end
 
+-- ─────────────────────────────────────────────
+-- 3. SISTEMAS
+-- ─────────────────────────────────────────────
 local function applyNitroColors()
     local c1 = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0)
     local c2 = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0)
@@ -238,6 +268,100 @@ local function applyJump()
     return true
 end
 
+local function startGravityLock()
+    if gravityLockConn then return end
+    gravityLockConn = RunService.Heartbeat:Connect(function()
+        if workspace.Gravity ~= currentGravity then
+            workspace.Gravity = currentGravity
+        end
+    end)
+end
+
+local function applyFrictionToWheels(friction)
+    local wheels = getWheels()
+    if #wheels == 0 then return 0 end
+    friction = math.clamp(tonumber(friction) or 1, 0, 4)
+    for _, w in ipairs(wheels) do
+        if not originalWheelPhys[w] then
+            pcall(function()
+                if w.CustomPhysicalProperties then
+                    originalWheelPhys[w] = w.CustomPhysicalProperties
+                else
+                    originalWheelPhys[w] = PhysicalProperties.new(w.Material)
+                end
+            end)
+        end
+        pcall(function()
+            local old = originalWheelPhys[w]
+            local density, elasticity, frictionWeight, elasticityWeight = 0.7, 0.5, 2, 1
+            if old then
+                density = old.Density
+                elasticity = old.Elasticity
+                frictionWeight = math.max(old.FrictionWeight or 1, 2)
+                elasticityWeight = old.ElasticityWeight or 1
+            end
+            w.CustomPhysicalProperties = PhysicalProperties.new(
+                density, friction, elasticity, frictionWeight, elasticityWeight
+            )
+        end)
+    end
+    return #wheels
+end
+
+local function restoreWheelPhysics()
+    local count = 0
+    for wheel, phys in pairs(originalWheelPhys) do
+        if wheel and wheel.Parent then
+            pcall(function() wheel.CustomPhysicalProperties = phys end)
+            count = count + 1
+        end
+    end
+    originalWheelPhys = {}
+    return count
+end
+
+local function startAdhesionLock()
+    if adhesionConn then return end
+    adhesionConn = RunService.Heartbeat:Connect(function()
+        if not adhesionEnabled then return end
+        for _, w in ipairs(getWheels()) do
+            pcall(function()
+                local props = w.CustomPhysicalProperties
+                if not props or math.abs(props.Friction - currentFriction) > 0.01 then
+                    applyFrictionToWheels(currentFriction)
+                end
+            end)
+        end
+    end)
+end
+
+local function stopAdhesionLock()
+    if adhesionConn then
+        adhesionConn:Disconnect()
+        adhesionConn = nil
+    end
+end
+
+local function applyFOV(value)
+    currentFOV = math.clamp(tonumber(value) or 70, 1, 120)
+    pcall(function()
+        local cam = workspace.CurrentCamera
+        if cam then cam.FieldOfView = currentFOV end
+    end)
+end
+
+local function startFOVLock()
+    if fovConn then return end
+    fovConn = RunService.Heartbeat:Connect(function()
+        pcall(function()
+            local cam = workspace.CurrentCamera
+            if cam and math.abs(cam.FieldOfView - currentFOV) > 0.1 then
+                cam.FieldOfView = currentFOV
+            end
+        end)
+    end)
+end
+
 local function createFloatingButton(name, text, color, callback, isHold)
     local old = floatingGui:FindFirstChild(name)
     if old then old:Destroy() end
@@ -282,198 +406,20 @@ local function createFloatingButton(name, text, color, callback, isHold)
 end
 
 -- ─────────────────────────────────────────────
--- RODAS (CDT)
+-- 4. CONFIGS (código)
 -- ─────────────────────────────────────────────
-local function getWheels()
-    local car = getCarModel()
-    if not car then return {} end
-    local wheels = {}
-    local names = {"FR", "FL", "RR", "RL"}
-    for _, name in ipairs(names) do
-        local wheelModel = car:FindFirstChild(name, true)
-        if wheelModel then
-            local wheelPart = wheelModel:FindFirstChild("Wheel", true)
-            if wheelPart and wheelPart:IsA("BasePart") then
-                table.insert(wheels, wheelPart)
-            elseif wheelModel:IsA("BasePart") then
-                table.insert(wheels, wheelModel)
-            end
-        end
-    end
-    if #wheels == 0 then
-        for _, desc in ipairs(car:GetDescendants()) do
-            if desc.Name == "Wheel" and desc:IsA("BasePart") then
-                table.insert(wheels, desc)
-            end
-        end
-    end
-    return wheels
-end
-
--- ─────────────────────────────────────────────
--- ADERÊNCIA (Friction forçada)
--- ─────────────────────────────────────────────
-local function applyFrictionToWheels(friction)
-    local wheels = getWheels()
-    if #wheels == 0 then return 0 end
-    friction = math.clamp(tonumber(friction) or 1, 0, 4)
-    for _, w in ipairs(wheels) do
-        if not originalWheelPhys[w] then
-            pcall(function()
-                if w.CustomPhysicalProperties then
-                    originalWheelPhys[w] = w.CustomPhysicalProperties
-                else
-                    originalWheelPhys[w] = PhysicalProperties.new(w.Material)
-                end
-            end)
-        end
-        pcall(function()
-            local old = originalWheelPhys[w]
-            local density = 0.7
-            local elasticity = 0.5
-            local frictionWeight = 2
-            local elasticityWeight = 1
-            if old then
-                density = old.Density
-                elasticity = old.Elasticity
-                frictionWeight = math.max(old.FrictionWeight or 1, 2)
-                elasticityWeight = old.ElasticityWeight or 1
-            end
-            w.CustomPhysicalProperties = PhysicalProperties.new(
-                density,
-                friction,
-                elasticity,
-                frictionWeight,
-                elasticityWeight
-            )
-        end)
-    end
-    return #wheels
-end
-
-local function restoreWheelPhysics()
-    local count = 0
-    for wheel, phys in pairs(originalWheelPhys) do
-        if wheel and wheel.Parent then
-            pcall(function()
-                wheel.CustomPhysicalProperties = phys
-            end)
-            count = count + 1
-        end
-    end
-    originalWheelPhys = {}
-    return count
-end
-
-local function startAdhesionLock()
-    if adhesionConn then return end
-    adhesionConn = RunService.Heartbeat:Connect(function()
-        if not adhesionEnabled then return end
-        local wheels = getWheels()
-        for _, w in ipairs(wheels) do
-            pcall(function()
-                local props = w.CustomPhysicalProperties
-                if not props or math.abs(props.Friction - currentFriction) > 0.01 then
-                    applyFrictionToWheels(currentFriction)
-                    return
-                end
-            end)
-        end
-    end)
-end
-
-local function stopAdhesionLock()
-    if adhesionConn then
-        adhesionConn:Disconnect()
-        adhesionConn = nil
-    end
-end
-
--- ─────────────────────────────────────────────
--- GRAVIDADE (sempre travada)
--- ─────────────────────────────────────────────
-local function startGravityLock()
-    if gravityLockConn then return end
-    gravityLockConn = RunService.Heartbeat:Connect(function()
-        if workspace.Gravity ~= currentGravity then
-            workspace.Gravity = currentGravity
-        end
-    end)
-end
-
--- ─────────────────────────────────────────────
--- SISTEMA DE CONFIGS
--- ─────────────────────────────────────────────
-local function ensureFolder()
-    pcall(function()
-        if isfolder and not isfolder("PainelXandao") then makefolder("PainelXandao") end
-        if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
-    end)
-end
-
-local function getConfigPath(name)
-    return CONFIG_FOLDER .. "/" .. name .. ".json"
-end
-
-local function timeAgo(timestamp)
-    local diff = os.time() - (tonumber(timestamp) or os.time())
-    if diff < 60 then return "agora"
-    elseif diff < 3600 then return math.floor(diff / 60) .. " min atrás"
-    elseif diff < 86400 then return math.floor(diff / 3600) .. " h atrás"
-    else return math.floor(diff / 86400) .. " dias atrás"
-    end
-end
-
-local function loadAllConfigs()
-    configs = {}
-    ensureFolder()
-    local ok, files = pcall(function()
-        if listfiles then return listfiles(CONFIG_FOLDER) end
-        return {}
-    end)
-    if not ok or type(files) ~= "table" then return end
-    for _, path in ipairs(files) do
-        local name = tostring(path):match("([^/\\]+)%.json$")
-        if name then
-            local success, content = pcall(function()
-                return readfile(path)
-            end)
-            if success and content and content ~= "" then
-                local decodeOk, data = pcall(function()
-                    return HttpService:JSONDecode(content)
-                end)
-                if decodeOk and type(data) == "table" then
-                    configs[name] = data
-                end
-            end
-        end
-    end
-end
-
-local function saveConfigToFile(name, data)
-    ensureFolder()
-    local ok = pcall(function()
-        writefile(getConfigPath(name), HttpService:JSONEncode(data))
-    end)
-    return ok
-end
-
-local function deleteConfigFile(name)
-    pcall(function()
-        if delfile then delfile(getConfigPath(name)) end
-    end)
-    configs[name] = nil
-end
+local ui = {}
+local nitroKeyBtn, jumpKeyBtn, menuKeyBtn
+local exportCodeBox
 
 local function getCurrentSettings()
     return {
-        name = "",
-        created = os.time(),
         nitroForce = BOOST_FORCE,
         jumpForce = JUMP_FORCE,
         gravity = currentGravity,
         friction = currentFriction,
         adhesionEnabled = adhesionEnabled,
+        fov = currentFOV,
         nitroColor1 = nitroColor1Hex,
         nitroColor2 = nitroColor2Hex,
         nitroEnabled = nitroEnabled,
@@ -486,10 +432,6 @@ local function getCurrentSettings()
     }
 end
 
-local ui = {}
-local nitroKeyBtn, jumpKeyBtn, menuKeyBtn
-local configDropdown, configInfoLabel
-
 local function applySettings(data)
     if type(data) ~= "table" then return false end
     BOOST_FORCE = tonumber(data.nitroForce) or BOOST_FORCE
@@ -498,22 +440,17 @@ local function applySettings(data)
     workspace.Gravity = currentGravity
     currentFriction = math.clamp(tonumber(data.friction) or currentFriction, 0, 4)
     adhesionEnabled = data.adhesionEnabled ~= false
+    if data.fov then applyFOV(data.fov) end
     nitroColor1Hex = data.nitroColor1 or nitroColor1Hex
     nitroColor2Hex = data.nitroColor2 or nitroColor2Hex
     nitroEnabled = data.nitroEnabled ~= false
-    jumpEnabled = data.jumpEnabled ~= false
+    jumpEnabled = data.jumpEnabled == true
     nitroEffectEnabled = data.nitroEffect ~= false
     menuScale = tonumber(data.menuScale) or 1
     pcall(function()
-        if data.nitroKey and Enum.KeyCode[data.nitroKey] then
-            nitroKey = Enum.KeyCode[data.nitroKey]
-        end
-        if data.jumpKey and Enum.KeyCode[data.jumpKey] then
-            jumpKey = Enum.KeyCode[data.jumpKey]
-        end
-        if data.menuKey and Enum.KeyCode[data.menuKey] then
-            menuKey = Enum.KeyCode[data.menuKey]
-        end
+        if data.nitroKey and Enum.KeyCode[data.nitroKey] then nitroKey = Enum.KeyCode[data.nitroKey] end
+        if data.jumpKey and Enum.KeyCode[data.jumpKey] then jumpKey = Enum.KeyCode[data.jumpKey] end
+        if data.menuKey and Enum.KeyCode[data.menuKey] then menuKey = Enum.KeyCode[data.menuKey] end
     end)
     applyNitroColors()
     if adhesionEnabled then
@@ -539,6 +476,7 @@ local function applySettings(data)
         if ui.gravitySlider then ui.gravitySlider:Set(currentGravity) end
         if ui.frictionSlider then ui.frictionSlider:Set(currentFriction) end
         if ui.adhesionToggle then ui.adhesionToggle:Set(adhesionEnabled) end
+        if ui.fovSlider then ui.fovSlider:Set(currentFOV) end
         if ui.menuScaleSlider then ui.menuScaleSlider:Set(menuScale) end
         if nitroKeyBtn then nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end
         if jumpKeyBtn then jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end
@@ -559,17 +497,27 @@ local function applySettings(data)
     return true
 end
 
-local function getConfigNames()
-    local names = {}
-    for name in pairs(configs) do
-        table.insert(names, name)
-    end
-    table.sort(names)
-    return names
+local function generateConfigCode()
+    local ok, encoded = pcall(function()
+        return HttpService:JSONEncode(getCurrentSettings())
+    end)
+    if ok and encoded then return encoded end
+    return ""
+end
+
+local function loadConfigFromCode(code)
+    if type(code) ~= "string" then return false end
+    code = code:gsub("^%s+", ""):gsub("%s+$", "")
+    if code == "" then return false end
+    local ok, data = pcall(function()
+        return HttpService:JSONDecode(code)
+    end)
+    if not ok or type(data) ~= "table" then return false end
+    return applySettings(data)
 end
 
 -- ─────────────────────────────────────────────
--- RAYFIELD UI
+-- 5. UI
 -- ─────────────────────────────────────────────
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -577,141 +525,49 @@ local Window = Rayfield:CreateWindow({
    Name = "⚡ Painel do Xandão",
    Icon = 0,
    LoadingTitle = "Painel do Xandão",
-   LoadingSubtitle = "by @alexandretop2",
+   LoadingSubtitle = "by Xandão",
    ShowText = "Xandão",
    Theme = "Default",
    ToggleUIKeybind = "J",
    DisableRayfieldPrompts = false,
    DisableBuildWarnings = false,
-   ConfigurationSaving = {
-      Enabled = true,
-      FolderName = "PainelXandao",
-      FileName = "AutoConfig"
-   },
+   ConfigurationSaving = { Enabled = false },
    Discord = { Enabled = false },
    KeySystem = false,
 })
 
-local function updateConfigInfo(name)
-    if not configInfoLabel then return end
-    local data = name and configs[name]
-    if not data then
-        pcall(function()
-            configInfoLabel:Set({
-                Title = "Nenhuma config selecionada",
-                Content = "Salve ou selecione uma config na lista"
-            })
-        end)
-        return
-    end
-    local text = string.format(
-        "Criada: %s\nNitro: %s  |  Pulo: %s\nGravidade: %s  |  Aderência: %s\nCores: %s / %s\nTeclas: %s | %s",
-        timeAgo(data.created),
-        tostring(data.nitroForce or "?"),
-        tostring(data.jumpForce or "?"),
-        tostring(data.gravity or "?"),
-        tostring(data.friction or "?"),
-        tostring(data.nitroColor1 or "?"),
-        tostring(data.nitroColor2 or "?"),
-        tostring(data.nitroKey or "?"),
-        tostring(data.jumpKey or "?")
-    )
-    pcall(function()
-        configInfoLabel:Set({
-            Title = tostring(name),
-            Content = text
-        })
-    end)
-end
-
-local function refreshConfigList(preferName)
-    loadAllConfigs()
-    local names = getConfigNames()
-    if #names == 0 then
-        names = {"(nenhuma config)"}
-        selectedConfigName = nil
-    else
-        if preferName and configs[preferName] then
-            selectedConfigName = preferName
-        elseif selectedConfigName and configs[selectedConfigName] then
-        else
-            selectedConfigName = names[1]
-        end
-    end
-    if configDropdown then
-        pcall(function()
-            configDropdown:Refresh(names)
-            if selectedConfigName and configs[selectedConfigName] then
-                configDropdown:Set({selectedConfigName})
-            end
-        end)
-    end
-    updateConfigInfo(selectedConfigName)
-    return names
-end
-
--- ==================== TAB NITRO ====================
+-- NITRO
 local NitroTab = Window:CreateTab("⚡ Nitro", 4483362458)
-
 NitroTab:CreateSection("Sistema")
 ui.nitroToggle = NitroTab:CreateToggle({
-   Name = "Ativar Nitro",
-   CurrentValue = true,
-   Flag = "NitroSystem",
-   Callback = function(Value)
-      nitroEnabled = Value
-      if not Value then stopBoost() end
-   end,
+   Name = "Ativar Nitro", CurrentValue = true, Flag = "NitroSystem",
+   Callback = function(Value) nitroEnabled = Value if not Value then stopBoost() end end,
 })
 ui.nitroEffectToggle = NitroTab:CreateToggle({
-   Name = "Efeito de Partículas (NitroFire)",
-   CurrentValue = true,
-   Flag = "NitroEffect",
-   Callback = function(Value)
-      nitroEffectEnabled = Value
-      if not Value then setNitroParticlesEnabled(false) end
-   end,
+   Name = "Efeito de Partículas (NitroFire)", CurrentValue = true, Flag = "NitroEffect",
+   Callback = function(Value) nitroEffectEnabled = Value if not Value then setNitroParticlesEnabled(false) end end,
 })
-
 NitroTab:CreateSection("Força")
 ui.nitroForceInput = NitroTab:CreateInput({
-   Name = "Força do Nitro",
-   CurrentValue = tostring(BOOST_FORCE),
-   PlaceholderText = "25000",
-   RemoveTextAfterFocusLost = false,
-   Flag = "NitroForce",
-   Callback = function(Text)
-      local v = tonumber(Text)
-      if v then BOOST_FORCE = math.max(v, 0) end
-   end,
+   Name = "Força do Nitro", CurrentValue = tostring(BOOST_FORCE), PlaceholderText = "1000",
+   RemoveTextAfterFocusLost = false, Flag = "NitroForce",
+   Callback = function(Text) local v = tonumber(Text) if v then BOOST_FORCE = math.max(v, 0) end end,
 })
-
-NitroTab:CreateSection("Cores das Partículas")
+NitroTab:CreateSection("Cores")
 ui.nitroColor1 = NitroTab:CreateColorPicker({
-   Name = "Cor Primária",
-   Color = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0),
-   Flag = "NitroColor1",
+   Name = "Cor Primária", Color = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0), Flag = "NitroColor1",
    Callback = function(Value)
-      local r = math.floor(Value.R * 255)
-      local g = math.floor(Value.G * 255)
-      local b = math.floor(Value.B * 255)
-      nitroColor1Hex = string.format("#%02X%02X%02X", r, g, b)
+      nitroColor1Hex = string.format("#%02X%02X%02X", math.floor(Value.R*255), math.floor(Value.G*255), math.floor(Value.B*255))
       applyNitroColors()
    end,
 })
 ui.nitroColor2 = NitroTab:CreateColorPicker({
-   Name = "Cor Secundária",
-   Color = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0),
-   Flag = "NitroColor2",
+   Name = "Cor Secundária", Color = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0), Flag = "NitroColor2",
    Callback = function(Value)
-      local r = math.floor(Value.R * 255)
-      local g = math.floor(Value.G * 255)
-      local b = math.floor(Value.B * 255)
-      nitroColor2Hex = string.format("#%02X%02X%02X", r, g, b)
+      nitroColor2Hex = string.format("#%02X%02X%02X", math.floor(Value.R*255), math.floor(Value.G*255), math.floor(Value.B*255))
       applyNitroColors()
    end,
 })
-
 NitroTab:CreateSection("Controles")
 NitroTab:CreateButton({
    Name = "📌 Criar / Remover Botão Flutuante",
@@ -730,44 +586,27 @@ NitroTab:CreateButton({
 })
 nitroKeyBtn = NitroTab:CreateButton({
    Name = "⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]",
-   Callback = function()
-      isBindingKey = true
-      bindingType = "nitro"
-   end,
+   Callback = function() isBindingKey = true bindingType = "nitro" end,
 })
-
 NitroTab:CreateSection("Como usar?")
 NitroTab:CreateParagraph({
    Title = "Nitro",
-   Content = "1. Entre no veículo\n2. Ajuste a força se quiser\n3. Segure a tecla (padrão: LeftShift) ou o botão flutuante\n4. Solte para parar\n\nPartículas só funcionam se o carro tiver NitroFire."
+   Content = "1. Entre no veículo\n2. Ajuste a força\n3. Segure LeftShift ou o botão flutuante\n4. Solte para parar",
 })
 
--- ==================== TAB PULO ====================
+-- PULO
 local JumpTab = Window:CreateTab("🦘 Pulo", 4483362458)
-
 JumpTab:CreateSection("Sistema")
 ui.jumpToggle = JumpTab:CreateToggle({
-   Name = "Ativar Pulo",
-   CurrentValue = true,
-   Flag = "JumpSystem",
-   Callback = function(Value)
-      jumpEnabled = Value
-   end,
+   Name = "Ativar Pulo", CurrentValue = false, Flag = "JumpSystem",
+   Callback = function(Value) jumpEnabled = Value end,
 })
-
 JumpTab:CreateSection("Força")
 ui.jumpForceInput = JumpTab:CreateInput({
-   Name = "Poder do Pulo",
-   CurrentValue = tostring(JUMP_FORCE),
-   PlaceholderText = "2000",
-   RemoveTextAfterFocusLost = false,
-   Flag = "JumpForce",
-   Callback = function(Text)
-      local v = tonumber(Text)
-      if v then JUMP_FORCE = math.max(v, 0) end
-   end,
+   Name = "Poder do Pulo", CurrentValue = tostring(JUMP_FORCE), PlaceholderText = "50",
+   RemoveTextAfterFocusLost = false, Flag = "JumpForce",
+   Callback = function(Text) local v = tonumber(Text) if v then JUMP_FORCE = math.max(v, 0) end end,
 })
-
 JumpTab:CreateSection("Controles")
 JumpTab:CreateButton({
    Name = "📌 Criar / Remover Botão Flutuante",
@@ -777,44 +616,29 @@ JumpTab:CreateButton({
          if old then old:Destroy() end
          jumpBtnExists = false
       else
-         createFloatingButton("FloatingJump", "🦘", Color3.fromRGB(0, 150, 220), function()
-            applyJump()
-         end, false)
+         createFloatingButton("FloatingJump", "🦘", Color3.fromRGB(0, 150, 220), function() applyJump() end, false)
          jumpBtnExists = true
       end
    end,
 })
 jumpKeyBtn = JumpTab:CreateButton({
    Name = "⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]",
-   Callback = function()
-      isBindingKey = true
-      bindingType = "jump"
-   end,
+   Callback = function() isBindingKey = true bindingType = "jump" end,
 })
-
 JumpTab:CreateSection("Como usar?")
 JumpTab:CreateParagraph({
    Title = "Pulo",
-   Content = "1. Entre no veículo\n2. Ajuste a força se quiser\n3. Pressione a tecla (padrão: Space) ou o botão flutuante\n4. O carro recebe um impulso para cima"
+   Content = "Começa desativado (Space = freio de mão).\nTecla padrão: LeftControl\n1. Ative o pulo\n2. Ajuste a força\n3. Use a tecla ou o botão",
 })
 
--- ==================== TAB GRAVIDADE ====================
+-- GRAVIDADE
 local GravityTab = Window:CreateTab("🌍 Gravidade", 4483362458)
-
 GravityTab:CreateSection("Controle")
 ui.gravitySlider = GravityTab:CreateSlider({
-   Name = "Valor da Gravidade",
-   Range = {0, 1000},
-   Increment = 1,
-   Suffix = "",
-   CurrentValue = math.clamp(ORIGINAL_GRAVITY, 0, 1000),
-   Flag = "Gravity",
-   Callback = function(Value)
-      currentGravity = Value
-      workspace.Gravity = Value
-   end,
+   Name = "Valor da Gravidade", Range = {0, 1000}, Increment = 1, Suffix = "",
+   CurrentValue = math.clamp(ORIGINAL_GRAVITY, 0, 1000), Flag = "Gravity",
+   Callback = function(Value) currentGravity = Value workspace.Gravity = Value end,
 })
-
 GravityTab:CreateButton({
    Name = "↩️ Restaurar Gravidade Original",
    Callback = function()
@@ -823,21 +647,17 @@ GravityTab:CreateButton({
       if ui.gravitySlider then ui.gravitySlider:Set(math.clamp(ORIGINAL_GRAVITY, 0, 1000)) end
    end,
 })
-
 GravityTab:CreateSection("Como usar?")
 GravityTab:CreateParagraph({
    Title = "Gravidade",
-   Content = "A gravidade fica sempre travada (anti-reset).\nArraste o slider e o valor é forçado a cada frame.\n\nOriginal do jogo: " .. tostring(ORIGINAL_GRAVITY) .. "\nRange: 0 a 1000"
+   Content = "Sempre travada (anti-reset).\nOriginal: " .. tostring(ORIGINAL_GRAVITY) .. " | Range: 0–1000",
 })
 
--- ==================== TAB ADERÊNCIA ====================
+-- ADERÊNCIA
 local AdhesionTab = Window:CreateTab("🛞 Aderência", 4483362458)
-
 AdhesionTab:CreateSection("Sistema")
 ui.adhesionToggle = AdhesionTab:CreateToggle({
-   Name = "Ativar Controle de Aderência",
-   CurrentValue = true,
-   Flag = "AdhesionEnabled",
+   Name = "Ativar Controle de Aderência", CurrentValue = true, Flag = "AdhesionEnabled",
    Callback = function(Value)
       adhesionEnabled = Value
       if Value then
@@ -849,23 +669,15 @@ ui.adhesionToggle = AdhesionTab:CreateToggle({
       end
    end,
 })
-
 AdhesionTab:CreateSection("Friction (0 - 4)")
 ui.frictionSlider = AdhesionTab:CreateSlider({
-   Name = "Aderência (Friction)",
-   Range = {0, 4},
-   Increment = 0.05,
-   Suffix = "",
-   CurrentValue = 1,
-   Flag = "Friction",
+   Name = "Aderência (Friction)", Range = {0, 4}, Increment = 0.05, Suffix = "",
+   CurrentValue = 1, Flag = "Friction",
    Callback = function(Value)
       currentFriction = Value
-      if adhesionEnabled then
-         applyFrictionToWheels(currentFriction)
-      end
+      if adhesionEnabled then applyFrictionToWheels(currentFriction) end
    end,
 })
-
 AdhesionTab:CreateSection("Presets")
 AdhesionTab:CreateButton({
    Name = "🏎️ Corrida (alta aderência)",
@@ -891,9 +703,8 @@ AdhesionTab:CreateButton({
       if adhesionEnabled then applyFrictionToWheels(currentFriction) end
    end,
 })
-
 AdhesionTab:CreateButton({
-   Name = "↩️ Restaurar Física Original das Rodas",
+   Name = "↩️ Restaurar Física Original",
    Callback = function()
       stopAdhesionLock()
       restoreWheelPhysics()
@@ -901,175 +712,109 @@ AdhesionTab:CreateButton({
       if ui.adhesionToggle then ui.adhesionToggle:Set(false) end
    end,
 })
-
 AdhesionTab:CreateSection("Como usar?")
 AdhesionTab:CreateParagraph({
    Title = "Aderência (CDT)",
-   Content = "1. Entre no veículo\n2. Ative o controle de aderência\n3. Use o slider (0 a 4) ou um preset\n\nO valor é forçado a cada frame (anti freio de mão / anti-reset).\n\nPresets:\n• Corrida = 1.4 (muito grip)\n• Drift = 0.35 (escorrega fácil)\n• Sem Aderência = 0.05 (quase gelo)\n\nTambém eleva FrictionWeight para a roda dominar o contato."
+   Content = "1. Entre no veículo\n2. Ative o controle\n3. Slider ou preset\n\nCorrida 1.4 | Drift 0.35 | Sem aderência 0.05\nForçado a cada frame (anti freio de mão).",
 })
 
--- ==================== TAB CONFIGS ====================
-local ConfigsTab = Window:CreateTab("💾 Configs", 4483362458)
-
-ConfigsTab:CreateSection("Salvar")
-ConfigsTab:CreateInput({
-   Name = "Nome da Config",
-   CurrentValue = "",
-   PlaceholderText = "Ex: SetupDrift",
-   RemoveTextAfterFocusLost = false,
-   Flag = "ConfigNameInput",
-   Callback = function(Text)
-      configNameText = tostring(Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+-- FOV
+local FOVTab = Window:CreateTab("📷 FOV", 4483362458)
+FOVTab:CreateSection("Campo de Visão")
+ui.fovSlider = FOVTab:CreateSlider({
+   Name = "FOV", Range = {1, 120}, Increment = 1, Suffix = "°",
+   CurrentValue = math.clamp(ORIGINAL_FOV, 1, 120), Flag = "FOV",
+   Callback = function(Value) applyFOV(Value) end,
+})
+FOVTab:CreateButton({
+   Name = "↩️ Restaurar FOV Original",
+   Callback = function()
+      applyFOV(ORIGINAL_FOV)
+      if ui.fovSlider then ui.fovSlider:Set(math.clamp(ORIGINAL_FOV, 1, 120)) end
    end,
+})
+FOVTab:CreateSection("Como usar?")
+FOVTab:CreateParagraph({
+   Title = "FOV",
+   Content = "Campo de visão da câmera.\nMínimo: 1° | Máximo: 120° | Padrão: ~70°\nValor travado para o jogo não resetar.",
+})
+
+-- CONFIGS
+local ConfigsTab = Window:CreateTab("💾 Configs", 4483362458)
+ConfigsTab:CreateSection("Gerar e copiar")
+ConfigsTab:CreateButton({
+   Name = "⚙️ Gerar Código da Config Atual",
+   Callback = function()
+      local code = generateConfigCode()
+      if exportCodeBox and code ~= "" then
+         pcall(function() exportCodeBox:Set(code) end)
+      end
+   end,
+})
+exportCodeBox = ConfigsTab:CreateInput({
+   Name = "Código gerado",
+   CurrentValue = "",
+   PlaceholderText = "Clique em Gerar Código...",
+   RemoveTextAfterFocusLost = false,
+   Flag = "ExportCode",
+   Callback = function() end,
 })
 ConfigsTab:CreateButton({
-   Name = "💾 Salvar Config Atual",
+   Name = "📋 Copiar Código",
    Callback = function()
-      local name = configNameText
-      if name == "" or name == "(nenhuma config)" then return end
-      name = name:gsub("[/\\:*?\"<>|]", "")
-      if name == "" then return end
-      local data = getCurrentSettings()
-      data.name = name
-      data.created = os.time()
-      local ok = saveConfigToFile(name, data)
-      if ok then
-         configs[name] = data
-         selectedConfigName = name
-         refreshConfigList(name)
+      local code = generateConfigCode()
+      if code ~= "" then
+         pcall(function() if setclipboard then setclipboard(code) end end)
+         pcall(function() if exportCodeBox then exportCodeBox:Set(code) end end)
       end
    end,
 })
-
-ConfigsTab:CreateSection("Configs Salvas")
-loadAllConfigs()
-local initialNames = getConfigNames()
-if #initialNames == 0 then
-    initialNames = {"(nenhuma config)"}
-else
-    selectedConfigName = initialNames[1]
-end
-
-configDropdown = ConfigsTab:CreateDropdown({
-   Name = "Selecionar Config",
-   Options = initialNames,
-   CurrentOption = {initialNames[1]},
-   MultipleOptions = false,
-   Flag = "SelectedConfig",
-   Callback = function(Option)
-      local name
-      if type(Option) == "table" then
-         name = Option[1] or Option.Name or Option.Value
-      else
-         name = Option
-      end
-      name = tostring(name or "")
-      if name ~= "" and name ~= "(nenhuma config)" and configs[name] then
-         selectedConfigName = name
-         updateConfigInfo(name)
-      elseif name == "(nenhuma config)" then
-         selectedConfigName = nil
-         updateConfigInfo(nil)
-      end
+ConfigsTab:CreateSection("Carregar")
+ConfigsTab:CreateInput({
+   Name = "Colar código aqui",
+   CurrentValue = "",
+   PlaceholderText = "Cole o código do amigo...",
+   RemoveTextAfterFocusLost = false,
+   Flag = "ImportCode",
+   Callback = function(Text)
+      importCodeText = tostring(Text or "")
    end,
 })
-
-configInfoLabel = ConfigsTab:CreateParagraph({
-   Title = selectedConfigName or "Nenhuma config selecionada",
-   Content = selectedConfigName and "Carregando..." or "Salve ou selecione uma config"
-})
-
-task.defer(function()
-    updateConfigInfo(selectedConfigName)
-end)
-
-ConfigsTab:CreateSection("Ações")
 ConfigsTab:CreateButton({
    Name = "📂 Carregar Config",
    Callback = function()
-      if not selectedConfigName or not configs[selectedConfigName] then
-         local names = getConfigNames()
-         if #names > 0 then selectedConfigName = names[1] end
+      local code = importCodeText
+      if code == "" then
+         pcall(function()
+            if Rayfield.Flags and Rayfield.Flags["ImportCode"] then
+               local f = Rayfield.Flags["ImportCode"]
+               code = tostring(f.CurrentValue or f.Value or "")
+            end
+         end)
       end
-      if not selectedConfigName or not configs[selectedConfigName] then return end
-      applySettings(configs[selectedConfigName])
-   end,
-})
-ConfigsTab:CreateButton({
-   Name = "🔄 Substituir pela Atual",
-   Callback = function()
-      if not selectedConfigName or selectedConfigName == "(nenhuma config)" or not configs[selectedConfigName] then return end
-      local data = getCurrentSettings()
-      data.name = selectedConfigName
-      data.created = configs[selectedConfigName].created or os.time()
-      if saveConfigToFile(selectedConfigName, data) then
-         configs[selectedConfigName] = data
-         updateConfigInfo(selectedConfigName)
+      if code ~= "" then
+         loadConfigFromCode(code)
       end
    end,
 })
-ConfigsTab:CreateButton({
-   Name = "✏️ Renomear Config",
-   Callback = function()
-      if not selectedConfigName or not configs[selectedConfigName] then return end
-      local newName = configNameText:gsub("[/\\:*?\"<>|]", "")
-      if newName == "" or newName == selectedConfigName then return end
-      local data = configs[selectedConfigName]
-      data.name = newName
-      if saveConfigToFile(newName, data) then
-         deleteConfigFile(selectedConfigName)
-         configs[newName] = data
-         selectedConfigName = newName
-         refreshConfigList(newName)
-      end
-   end,
-})
-ConfigsTab:CreateButton({
-   Name = "🗑️ Apagar Config",
-   Callback = function()
-      if not selectedConfigName or not configs[selectedConfigName] then return end
-      deleteConfigFile(selectedConfigName)
-      selectedConfigName = nil
-      refreshConfigList()
-   end,
-})
-ConfigsTab:CreateButton({
-   Name = "🔄 Atualizar Lista",
-   Callback = function()
-      refreshConfigList()
-   end,
-})
-
 ConfigsTab:CreateSection("Como usar?")
 ConfigsTab:CreateParagraph({
-   Title = "Configs",
-   Content = "Salve setups (nitro, pulo, gravidade, aderência, teclas).\nUse Carregar para aplicar.\nPrecisa de writefile/readfile no executor."
+   Title = "Configs por código",
+   Content = "Compartilhar:\n1. Ajuste o painel\n2. Gerar Código\n3. Copiar Código\n4. Envie pro amigo\n\nCarregar:\n1. Cole o código\n2. Carregar Config\n3. A interface atualiza sozinha",
 })
 
--- ==================== TAB AJUSTES ====================
+-- AJUSTES
 local SettingsTab = Window:CreateTab("⚙️ Ajustes", 4483362458)
-
 SettingsTab:CreateSection("Teclas")
-SettingsTab:CreateParagraph({
-   Title = "Menu Principal",
-   Content = "Tecla padrão para abrir/fechar: J"
-})
+SettingsTab:CreateParagraph({ Title = "Menu", Content = "Abrir/fechar painel: J" })
 menuKeyBtn = SettingsTab:CreateButton({
    Name = "⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]",
-   Callback = function()
-      isBindingKey = true
-      bindingType = "menu"
-   end,
+   Callback = function() isBindingKey = true bindingType = "menu" end,
 })
-
 SettingsTab:CreateSection("Interface")
 ui.menuScaleSlider = SettingsTab:CreateSlider({
-   Name = "Escala do Menu",
-   Range = {0.5, 2},
-   Increment = 0.05,
-   Suffix = "x",
-   CurrentValue = 1,
-   Flag = "MenuScale",
+   Name = "Escala do Menu", Range = {0.5, 2}, Increment = 0.05, Suffix = "x",
+   CurrentValue = 1, Flag = "MenuScale",
    Callback = function(Value)
       menuScale = Value
       pcall(function()
@@ -1086,36 +831,29 @@ ui.menuScaleSlider = SettingsTab:CreateSlider({
       end)
    end,
 })
-
 SettingsTab:CreateSection("Como usar?")
-SettingsTab:CreateParagraph({
-   Title = "Ajustes",
-   Content = "Altere a tecla extra do menu e o tamanho da interface.\nA tecla J (Rayfield) continua funcionando."
-})
+SettingsTab:CreateParagraph({ Title = "Ajustes", Content = "Tecla extra do menu e tamanho da interface." })
 
--- ==================== TAB CRÉDITOS ====================
+-- CRÉDITOS
 local CreditsTab = Window:CreateTab("👑 Créditos", 4483362458)
-
 CreditsTab:CreateSection("Desenvolvedor")
 CreditsTab:CreateParagraph({
    Title = "Painel do Xandão",
-   Content = "Desenvolvido por @alexandretop2\n\nVersão 1.1 — Uso público\nObrigado por utilizar!"
+   Content = "Desenvolvido por Xandão\n\nVersão 1.2 — Uso público\nObrigado por utilizar!",
 })
-
 CreditsTab:CreateSection("Recursos")
 CreditsTab:CreateParagraph({
-   Title = "O que o painel oferece",
-   Content = "• Nitro com força e cores personalizáveis\n• Sistema de pulo configurável\n• Gravidade sempre travada (anti-reset)\n• Aderência (friction) com presets e trava\n• Sistema de configs salvas\n• Botões flutuantes e teclas customizáveis"
+   Title = "O que tem no painel",
+   Content = "• Nitro (força + cores)\n• Pulo (Control, começa off)\n• Gravidade travada\n• Aderência com presets\n• FOV 1°–120°\n• Configs por código (copiar/colar)",
 })
-
-CreditsTab:CreateSection("Contato")
+CreditsTab:CreateSection("Créditos")
 CreditsTab:CreateParagraph({
    Title = "Créditos",
-   Content = "Criado e mantido por:\n@alexandretop2\n\nNão remova os créditos.\nDivulgue com respeito."
+   Content = "Criado por Xandão\nNão remova os créditos.",
 })
 
 -- ─────────────────────────────────────────────
--- INPUT
+-- 6. INPUT + INIT
 -- ─────────────────────────────────────────────
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if isBindingKey and (input.UserInputType == Enum.UserInputType.Keyboard
@@ -1136,25 +874,15 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         return
     end
     if gameProcessed then return end
-    if input.KeyCode == nitroKey and nitroEnabled then
-        startBoost()
-    end
-    if input.KeyCode == jumpKey and jumpEnabled then
-        applyJump()
-    end
+    if input.KeyCode == nitroKey and nitroEnabled then startBoost() end
+    if input.KeyCode == jumpKey and jumpEnabled then applyJump() end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    if input.KeyCode == nitroKey then
-        stopBoost()
-    end
+    if input.KeyCode == nitroKey then stopBoost() end
 end)
 
--- Inicia travas
 startGravityLock()
 startAdhesionLock()
-
-task.spawn(function()
-    task.wait(0.8)
-    refreshConfigList()
-end)
+startFOVLock()
+applyFOV(currentFOV)
