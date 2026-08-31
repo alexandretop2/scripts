@@ -722,7 +722,7 @@ AdhesionTab:CreateParagraph({
 local FOVTab = Window:CreateTab("📷 FOV", 4483362458)
 FOVTab:CreateSection("Campo de Visão")
 ui.fovSlider = FOVTab:CreateSlider({
-   Name = "FOV", Range = {1, 120}, Increment = 1, Suffix = "°",
+   Name = "FOV", Range = {50, 120}, Increment = 1, Suffix = "°",
    CurrentValue = math.clamp(ORIGINAL_FOV, 1, 120), Flag = "FOV",
    Callback = function(Value) applyFOV(Value) end,
 })
