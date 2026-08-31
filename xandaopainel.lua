@@ -1,10 +1,10 @@
 --[[
     ═══════════════════════════════════════════
     ⚡ PAINEL DO XANDÃO
-    Nitro • Pulo • Gravidade • Velocidade • Configs
+    Nitro • Pulo • Gravidade • Aderência • Configs
     ───────────────────────────────────────────
     Desenvolvido por: @alexandretop2
-    Versão: 1.0 | Público
+    Versão: 1.1 | Público
     ═══════════════════════════════════════════
 ]]
 
@@ -46,26 +46,26 @@ local nitroColor2Hex = "#FFAA00"
 
 local ORIGINAL_GRAVITY = workspace.Gravity
 local currentGravity = workspace.Gravity
-local gravityLocked = false
 local gravityLockConn = nil
 
-local menuScale = 1
-local maxSpeedEnabled = false
-local MAX_SPEED = 150
-local speedLimitConn = nil
+-- Aderência (friction)
+local currentFriction = 1.0
+local adhesionEnabled = true
+local adhesionConn = nil
+local originalWheelPhys = {}
 
-local STUDS_TO_METERS = 0.28
-local function studsToKmh(studs)
-    return (tonumber(studs) or 0) * STUDS_TO_METERS * 3.6
-end
-local function kmhToStuds(kmh)
-    return (tonumber(kmh) or 0) / (STUDS_TO_METERS * 3.6)
-end
+local menuScale = 1
 
 local CONFIG_FOLDER = "PainelXandao/Configs"
 local configs = {}
 local selectedConfigName = nil
 local configNameText = ""
+
+local ADHESION_PRESETS = {
+    ["Drift"] = 0.35,
+    ["Corrida"] = 1.4,
+    ["Sem Aderência"] = 0.05,
+}
 
 -- ─────────────────────────────────────────────
 -- HELPERS
@@ -282,67 +282,123 @@ local function createFloatingButton(name, text, color, callback, isHold)
 end
 
 -- ─────────────────────────────────────────────
--- GRAVIDADE (com trava anti-reset)
+-- RODAS (CDT)
 -- ─────────────────────────────────────────────
-local function stopGravityLock()
-    if gravityLockConn then
-        gravityLockConn:Disconnect()
-        gravityLockConn = nil
+local function getWheels()
+    local car = getCarModel()
+    if not car then return {} end
+    local wheels = {}
+    local names = {"FR", "FL", "RR", "RL"}
+    for _, name in ipairs(names) do
+        local wheelModel = car:FindFirstChild(name, true)
+        if wheelModel then
+            local wheelPart = wheelModel:FindFirstChild("Wheel", true)
+            if wheelPart and wheelPart:IsA("BasePart") then
+                table.insert(wheels, wheelPart)
+            elseif wheelModel:IsA("BasePart") then
+                table.insert(wheels, wheelModel)
+            end
+        end
+    end
+    if #wheels == 0 then
+        for _, desc in ipairs(car:GetDescendants()) do
+            if desc.Name == "Wheel" and desc:IsA("BasePart") then
+                table.insert(wheels, desc)
+            end
+        end
+    end
+    return wheels
+end
+
+-- ─────────────────────────────────────────────
+-- ADERÊNCIA (Friction forçada)
+-- ─────────────────────────────────────────────
+local function applyFrictionToWheels(friction)
+    local wheels = getWheels()
+    if #wheels == 0 then return 0 end
+    friction = math.clamp(tonumber(friction) or 1, 0, 4)
+    for _, w in ipairs(wheels) do
+        if not originalWheelPhys[w] then
+            pcall(function()
+                if w.CustomPhysicalProperties then
+                    originalWheelPhys[w] = w.CustomPhysicalProperties
+                else
+                    originalWheelPhys[w] = PhysicalProperties.new(w.Material)
+                end
+            end)
+        end
+        pcall(function()
+            local old = originalWheelPhys[w]
+            local density = 0.7
+            local elasticity = 0.5
+            local frictionWeight = 2
+            local elasticityWeight = 1
+            if old then
+                density = old.Density
+                elasticity = old.Elasticity
+                frictionWeight = math.max(old.FrictionWeight or 1, 2)
+                elasticityWeight = old.ElasticityWeight or 1
+            end
+            w.CustomPhysicalProperties = PhysicalProperties.new(
+                density,
+                friction,
+                elasticity,
+                frictionWeight,
+                elasticityWeight
+            )
+        end)
+    end
+    return #wheels
+end
+
+local function restoreWheelPhysics()
+    local count = 0
+    for wheel, phys in pairs(originalWheelPhys) do
+        if wheel and wheel.Parent then
+            pcall(function()
+                wheel.CustomPhysicalProperties = phys
+            end)
+            count = count + 1
+        end
+    end
+    originalWheelPhys = {}
+    return count
+end
+
+local function startAdhesionLock()
+    if adhesionConn then return end
+    adhesionConn = RunService.Heartbeat:Connect(function()
+        if not adhesionEnabled then return end
+        local wheels = getWheels()
+        for _, w in ipairs(wheels) do
+            pcall(function()
+                local props = w.CustomPhysicalProperties
+                if not props or math.abs(props.Friction - currentFriction) > 0.01 then
+                    applyFrictionToWheels(currentFriction)
+                    return
+                end
+            end)
+        end
+    end)
+end
+
+local function stopAdhesionLock()
+    if adhesionConn then
+        adhesionConn:Disconnect()
+        adhesionConn = nil
     end
 end
 
+-- ─────────────────────────────────────────────
+-- GRAVIDADE (sempre travada)
+-- ─────────────────────────────────────────────
 local function startGravityLock()
-    stopGravityLock()
-    if not gravityLocked then return end
+    if gravityLockConn then return end
     gravityLockConn = RunService.Heartbeat:Connect(function()
-        if not gravityLocked then return end
         if workspace.Gravity ~= currentGravity then
             workspace.Gravity = currentGravity
         end
     end)
-end
-
-local function setGravityLocked(value)
-    gravityLocked = value
-    if value then
-        startGravityLock()
-    else
-        stopGravityLock()
-    end
-end
-
--- ─────────────────────────────────────────────
--- VELOCIDADE MÁXIMA
--- ─────────────────────────────────────────────
-local function stopSpeedLimit()
-    if speedLimitConn then
-        speedLimitConn:Disconnect()
-        speedLimitConn = nil
-    end
-end
-
-local function startSpeedLimit()
-    stopSpeedLimit()
-    if not maxSpeedEnabled then return end
-    speedLimitConn = RunService.Heartbeat:Connect(function()
-        if not maxSpeedEnabled then return end
-        local root = getVehicleRoot()
-        if not root then return end
-        local vel = root.AssemblyLinearVelocity
-        local speed = vel.Magnitude
-        if speed > MAX_SPEED and speed > 0.1 then
-            root.AssemblyLinearVelocity = vel.Unit * MAX_SPEED
-        end
-    end)
-end
-
-local function setMaxSpeedEnabled(value)
-    maxSpeedEnabled = value
-    if value then
-        startSpeedLimit()
-    else
-        stopSpeedLimit()
-    end
 end
 
 -- ─────────────────────────────────────────────
@@ -396,10 +452,10 @@ end
 
 local function saveConfigToFile(name, data)
     ensureFolder()
-    local ok, err = pcall(function()
+    local ok = pcall(function()
         writefile(getConfigPath(name), HttpService:JSONEncode(data))
     end)
-    return ok, err
+    return ok
 end
 
 local function deleteConfigFile(name)
@@ -416,7 +472,8 @@ local function getCurrentSettings()
         nitroForce = BOOST_FORCE,
         jumpForce = JUMP_FORCE,
         gravity = currentGravity,
-        gravityLocked = gravityLocked,
+        friction = currentFriction,
+        adhesionEnabled = adhesionEnabled,
         nitroColor1 = nitroColor1Hex,
         nitroColor2 = nitroColor2Hex,
         nitroEnabled = nitroEnabled,
@@ -439,7 +496,8 @@ local function applySettings(data)
     JUMP_FORCE = tonumber(data.jumpForce) or JUMP_FORCE
     currentGravity = tonumber(data.gravity) or currentGravity
     workspace.Gravity = currentGravity
-    setGravityLocked(data.gravityLocked == true)
+    currentFriction = math.clamp(tonumber(data.friction) or currentFriction, 0, 4)
+    adhesionEnabled = data.adhesionEnabled ~= false
     nitroColor1Hex = data.nitroColor1 or nitroColor1Hex
     nitroColor2Hex = data.nitroColor2 or nitroColor2Hex
     nitroEnabled = data.nitroEnabled ~= false
@@ -458,6 +516,12 @@ local function applySettings(data)
         end
     end)
     applyNitroColors()
+    if adhesionEnabled then
+        applyFrictionToWheels(currentFriction)
+        startAdhesionLock()
+    else
+        stopAdhesionLock()
+    end
     pcall(function()
         if ui.nitroToggle then ui.nitroToggle:Set(nitroEnabled) end
         if ui.nitroEffectToggle then ui.nitroEffectToggle:Set(nitroEffectEnabled) end
@@ -473,15 +537,16 @@ local function applySettings(data)
         if ui.jumpToggle then ui.jumpToggle:Set(jumpEnabled) end
         if ui.jumpForceInput then ui.jumpForceInput:Set(tostring(JUMP_FORCE)) end
         if ui.gravitySlider then ui.gravitySlider:Set(currentGravity) end
-        if ui.gravityLockToggle then ui.gravityLockToggle:Set(gravityLocked) end
+        if ui.frictionSlider then ui.frictionSlider:Set(currentFriction) end
+        if ui.adhesionToggle then ui.adhesionToggle:Set(adhesionEnabled) end
         if ui.menuScaleSlider then ui.menuScaleSlider:Set(menuScale) end
         if nitroKeyBtn then nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end
         if jumpKeyBtn then jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end
         if menuKeyBtn then menuKeyBtn:Set("⌨️ Tecla Menu: [" .. menuKey.Name .. "]") end
     end)
     pcall(function()
-        for _, gui in ipairs({game:GetService("CoreGui"), playerGui}) do
-            local rf = gui:FindFirstChild("Rayfield") or gui:FindFirstChild("RayfieldLibrary")
+        for _, g in ipairs({game:GetService("CoreGui"), playerGui}) do
+            local rf = g:FindFirstChild("Rayfield") or g:FindFirstChild("RayfieldLibrary")
             if rf then
                 local main = rf:FindFirstChild("Main", true)
                 if main and main:IsA("GuiObject") then
@@ -540,12 +605,12 @@ local function updateConfigInfo(name)
         return
     end
     local text = string.format(
-        "Criada: %s\nNitro: %s  |  Pulo: %s\nGravidade: %s  |  Trava: %s\nCores: %s / %s\nTeclas: %s | %s",
+        "Criada: %s\nNitro: %s  |  Pulo: %s\nGravidade: %s  |  Aderência: %s\nCores: %s / %s\nTeclas: %s | %s",
         timeAgo(data.created),
         tostring(data.nitroForce or "?"),
         tostring(data.jumpForce or "?"),
         tostring(data.gravity or "?"),
-        data.gravityLocked and "ON" or "OFF",
+        tostring(data.friction or "?"),
         tostring(data.nitroColor1 or "?"),
         tostring(data.nitroColor2 or "?"),
         tostring(data.nitroKey or "?"),
@@ -610,16 +675,14 @@ ui.nitroEffectToggle = NitroTab:CreateToggle({
 
 NitroTab:CreateSection("Força")
 ui.nitroForceInput = NitroTab:CreateInput({
-   Name = "Força do Nitro (100 - 1.000.000)",
+   Name = "Força do Nitro",
    CurrentValue = tostring(BOOST_FORCE),
    PlaceholderText = "25000",
    RemoveTextAfterFocusLost = false,
    Flag = "NitroForce",
    Callback = function(Text)
       local v = tonumber(Text)
-      if v then
-         BOOST_FORCE = math.clamp(v, 100, 1000000)
-      end
+      if v then BOOST_FORCE = math.max(v, 0) end
    end,
 })
 
@@ -673,6 +736,12 @@ nitroKeyBtn = NitroTab:CreateButton({
    end,
 })
 
+NitroTab:CreateSection("Como usar?")
+NitroTab:CreateParagraph({
+   Title = "Nitro",
+   Content = "1. Entre no veículo\n2. Ajuste a força se quiser\n3. Segure a tecla (padrão: LeftShift) ou o botão flutuante\n4. Solte para parar\n\nPartículas só funcionam se o carro tiver NitroFire."
+})
+
 -- ==================== TAB PULO ====================
 local JumpTab = Window:CreateTab("🦘 Pulo", 4483362458)
 
@@ -688,16 +757,14 @@ ui.jumpToggle = JumpTab:CreateToggle({
 
 JumpTab:CreateSection("Força")
 ui.jumpForceInput = JumpTab:CreateInput({
-   Name = "Poder do Pulo (0 - 5000)",
+   Name = "Poder do Pulo",
    CurrentValue = tostring(JUMP_FORCE),
    PlaceholderText = "2000",
    RemoveTextAfterFocusLost = false,
    Flag = "JumpForce",
    Callback = function(Text)
       local v = tonumber(Text)
-      if v then
-         JUMP_FORCE = math.clamp(v, 0, 5000)
-      end
+      if v then JUMP_FORCE = math.max(v, 0) end
    end,
 })
 
@@ -725,25 +792,22 @@ jumpKeyBtn = JumpTab:CreateButton({
    end,
 })
 
+JumpTab:CreateSection("Como usar?")
+JumpTab:CreateParagraph({
+   Title = "Pulo",
+   Content = "1. Entre no veículo\n2. Ajuste a força se quiser\n3. Pressione a tecla (padrão: Space) ou o botão flutuante\n4. O carro recebe um impulso para cima"
+})
+
 -- ==================== TAB GRAVIDADE ====================
 local GravityTab = Window:CreateTab("🌍 Gravidade", 4483362458)
 
 GravityTab:CreateSection("Controle")
-ui.gravityLockToggle = GravityTab:CreateToggle({
-   Name = "🔒 Travar Gravidade (anti-reset)",
-   CurrentValue = false,
-   Flag = "GravityLock",
-   Callback = function(Value)
-      setGravityLocked(Value)
-   end,
-})
-
 ui.gravitySlider = GravityTab:CreateSlider({
    Name = "Valor da Gravidade",
-   Range = {0, 500},
+   Range = {0, 1000},
    Increment = 1,
    Suffix = "",
-   CurrentValue = math.clamp(ORIGINAL_GRAVITY, 0, 500),
+   CurrentValue = math.clamp(ORIGINAL_GRAVITY, 0, 1000),
    Flag = "Gravity",
    Callback = function(Value)
       currentGravity = Value
@@ -756,98 +820,92 @@ GravityTab:CreateButton({
    Callback = function()
       currentGravity = ORIGINAL_GRAVITY
       workspace.Gravity = ORIGINAL_GRAVITY
-      if ui.gravitySlider then ui.gravitySlider:Set(ORIGINAL_GRAVITY) end
+      if ui.gravitySlider then ui.gravitySlider:Set(math.clamp(ORIGINAL_GRAVITY, 0, 1000)) end
    end,
 })
 
+GravityTab:CreateSection("Como usar?")
 GravityTab:CreateParagraph({
-   Title = "Informação",
-   Content = "Gravidade original: " .. tostring(ORIGINAL_GRAVITY) .. "\n\nSe o jogo resetar o valor sozinho, ative a trava.\nO script forçará a gravidade a cada frame."
+   Title = "Gravidade",
+   Content = "A gravidade fica sempre travada (anti-reset).\nArraste o slider e o valor é forçado a cada frame.\n\nOriginal do jogo: " .. tostring(ORIGINAL_GRAVITY) .. "\nRange: 0 a 1000"
 })
 
--- ==================== TAB VELOCIDADE ====================
-local SpeedTab = Window:CreateTab("🏎️ Velocidade", 4483362458)
-local maxSpeedKmh = studsToKmh(MAX_SPEED)
+-- ==================== TAB ADERÊNCIA ====================
+local AdhesionTab = Window:CreateTab("🛞 Aderência", 4483362458)
 
-SpeedTab:CreateSection("Limite de Velocidade")
-ui.maxSpeedToggle = SpeedTab:CreateToggle({
-   Name = "Ativar Limite",
-   CurrentValue = false,
-   Flag = "MaxSpeedEnabled",
+AdhesionTab:CreateSection("Sistema")
+ui.adhesionToggle = AdhesionTab:CreateToggle({
+   Name = "Ativar Controle de Aderência",
+   CurrentValue = true,
+   Flag = "AdhesionEnabled",
    Callback = function(Value)
-      setMaxSpeedEnabled(Value)
-   end,
-})
-ui.maxSpeedKmhInput = SpeedTab:CreateInput({
-   Name = "Velocidade máxima (km/h)",
-   CurrentValue = string.format("%.0f", maxSpeedKmh),
-   PlaceholderText = "Ex: 360",
-   RemoveTextAfterFocusLost = false,
-   Flag = "MaxSpeedKmh",
-   Callback = function(Text)
-      local kmh = tonumber(Text)
-      if not kmh then return end
-      kmh = math.clamp(kmh, 1, 5000)
-      maxSpeedKmh = kmh
-      MAX_SPEED = kmhToStuds(kmh)
+      adhesionEnabled = Value
+      if Value then
+         applyFrictionToWheels(currentFriction)
+         startAdhesionLock()
+      else
+         stopAdhesionLock()
+         restoreWheelPhysics()
+      end
    end,
 })
 
-SpeedTab:CreateParagraph({
-   Title = "Como funciona",
-   Content = "Digite a velocidade em km/h e ative o toggle.\nConversão automática para studs/s.\n\nProporção: 1 stud = " .. tostring(STUDS_TO_METERS) .. " m\n(edite STUDS_TO_METERS no script se necessário)"
+AdhesionTab:CreateSection("Friction (0 - 4)")
+ui.frictionSlider = AdhesionTab:CreateSlider({
+   Name = "Aderência (Friction)",
+   Range = {0, 4},
+   Increment = 0.05,
+   Suffix = "",
+   CurrentValue = 1,
+   Flag = "Friction",
+   Callback = function(Value)
+      currentFriction = Value
+      if adhesionEnabled then
+         applyFrictionToWheels(currentFriction)
+      end
+   end,
 })
 
-SpeedTab:CreateSection("Conversor")
-ui.convertKmhOnly = SpeedTab:CreateInput({
-   Name = "km/h → studs/s",
-   CurrentValue = "",
-   PlaceholderText = "Digite km/h",
-   RemoveTextAfterFocusLost = false,
-   Flag = "ConvertKmhOnly",
-   Callback = function(Text)
-      local kmh = tonumber(Text)
-      if not kmh then return end
-      local studs = kmhToStuds(kmh)
-      pcall(function()
-         if ui.convertStudsResult then
-            ui.convertStudsResult:Set(string.format("%.1f studs/s", studs))
-         end
-      end)
+AdhesionTab:CreateSection("Presets")
+AdhesionTab:CreateButton({
+   Name = "🏎️ Corrida (alta aderência)",
+   Callback = function()
+      currentFriction = ADHESION_PRESETS["Corrida"]
+      if ui.frictionSlider then ui.frictionSlider:Set(currentFriction) end
+      if adhesionEnabled then applyFrictionToWheels(currentFriction) end
    end,
 })
-ui.convertStudsResult = SpeedTab:CreateInput({
-   Name = "Resultado (studs/s)",
-   CurrentValue = "",
-   PlaceholderText = "—",
-   RemoveTextAfterFocusLost = false,
-   Flag = "ConvertStudsResult",
-   Callback = function() end,
-})
-SpeedTab:CreateInput({
-   Name = "studs/s → km/h",
-   CurrentValue = "",
-   PlaceholderText = "Digite studs/s",
-   RemoveTextAfterFocusLost = false,
-   Flag = "ConvertStudsOnly",
-   Callback = function(Text)
-      local studs = tonumber(Text)
-      if not studs then return end
-      local kmh = studsToKmh(studs)
-      pcall(function()
-         if ui.convertKmhResult then
-            ui.convertKmhResult:Set(string.format("%.1f km/h", kmh))
-         end
-      end)
+AdhesionTab:CreateButton({
+   Name = "🌀 Drift (média-baixa)",
+   Callback = function()
+      currentFriction = ADHESION_PRESETS["Drift"]
+      if ui.frictionSlider then ui.frictionSlider:Set(currentFriction) end
+      if adhesionEnabled then applyFrictionToWheels(currentFriction) end
    end,
 })
-ui.convertKmhResult = SpeedTab:CreateInput({
-   Name = "Resultado (km/h)",
-   CurrentValue = "",
-   PlaceholderText = "—",
-   RemoveTextAfterFocusLost = false,
-   Flag = "ConvertKmhResult",
-   Callback = function() end,
+AdhesionTab:CreateButton({
+   Name = "🧊 Sem Aderência",
+   Callback = function()
+      currentFriction = ADHESION_PRESETS["Sem Aderência"]
+      if ui.frictionSlider then ui.frictionSlider:Set(currentFriction) end
+      if adhesionEnabled then applyFrictionToWheels(currentFriction) end
+   end,
+})
+
+AdhesionTab:CreateButton({
+   Name = "↩️ Restaurar Física Original das Rodas",
+   Callback = function()
+      stopAdhesionLock()
+      restoreWheelPhysics()
+      adhesionEnabled = false
+      if ui.adhesionToggle then ui.adhesionToggle:Set(false) end
+   end,
+})
+
+AdhesionTab:CreateSection("Como usar?")
+AdhesionTab:CreateParagraph({
+   Title = "Aderência (CDT)",
+   Content = "1. Entre no veículo\n2. Ative o controle de aderência\n3. Use o slider (0 a 4) ou um preset\n\nO valor é forçado a cada frame (anti freio de mão / anti-reset).\n\nPresets:\n• Corrida = 1.4 (muito grip)\n• Drift = 0.35 (escorrega fácil)\n• Sem Aderência = 0.05 (quase gelo)\n\nTambém eleva FrictionWeight para a roda dominar o contato."
 })
 
 -- ==================== TAB CONFIGS ====================
@@ -982,13 +1040,19 @@ ConfigsTab:CreateButton({
    end,
 })
 
+ConfigsTab:CreateSection("Como usar?")
+ConfigsTab:CreateParagraph({
+   Title = "Configs",
+   Content = "Salve setups (nitro, pulo, gravidade, aderência, teclas).\nUse Carregar para aplicar.\nPrecisa de writefile/readfile no executor."
+})
+
 -- ==================== TAB AJUSTES ====================
 local SettingsTab = Window:CreateTab("⚙️ Ajustes", 4483362458)
 
 SettingsTab:CreateSection("Teclas")
 SettingsTab:CreateParagraph({
    Title = "Menu Principal",
-   Content = "Tecla padrão para abrir/fechar: J\n(nativo do Rayfield)"
+   Content = "Tecla padrão para abrir/fechar: J"
 })
 menuKeyBtn = SettingsTab:CreateButton({
    Name = "⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]",
@@ -1009,8 +1073,8 @@ ui.menuScaleSlider = SettingsTab:CreateSlider({
    Callback = function(Value)
       menuScale = Value
       pcall(function()
-         for _, gui in ipairs({game:GetService("CoreGui"), playerGui}) do
-            local rf = gui:FindFirstChild("Rayfield") or gui:FindFirstChild("RayfieldLibrary")
+         for _, g in ipairs({game:GetService("CoreGui"), playerGui}) do
+            local rf = g:FindFirstChild("Rayfield") or g:FindFirstChild("RayfieldLibrary")
             if rf then
                local main = rf:FindFirstChild("Main", true)
                if main and main:IsA("GuiObject") then
@@ -1023,19 +1087,25 @@ ui.menuScaleSlider = SettingsTab:CreateSlider({
    end,
 })
 
+SettingsTab:CreateSection("Como usar?")
+SettingsTab:CreateParagraph({
+   Title = "Ajustes",
+   Content = "Altere a tecla extra do menu e o tamanho da interface.\nA tecla J (Rayfield) continua funcionando."
+})
+
 -- ==================== TAB CRÉDITOS ====================
 local CreditsTab = Window:CreateTab("👑 Créditos", 4483362458)
 
 CreditsTab:CreateSection("Desenvolvedor")
 CreditsTab:CreateParagraph({
    Title = "Painel do Xandão",
-   Content = "Desenvolvido por @alexandretop2\n\nVersão 1.0 — Uso público\nObrigado por utilizar!"
+   Content = "Desenvolvido por @alexandretop2\n\nVersão 1.1 — Uso público\nObrigado por utilizar!"
 })
 
 CreditsTab:CreateSection("Recursos")
 CreditsTab:CreateParagraph({
    Title = "O que o painel oferece",
-   Content = "• Nitro com força e cores personalizáveis\n• Sistema de pulo configurável\n• Gravidade com trava anti-reset\n• Limite de velocidade (km/h)\n• Sistema de configs salvas\n• Botões flutuantes e teclas customizáveis"
+   Content = "• Nitro com força e cores personalizáveis\n• Sistema de pulo configurável\n• Gravidade sempre travada (anti-reset)\n• Aderência (friction) com presets e trava\n• Sistema de configs salvas\n• Botões flutuantes e teclas customizáveis"
 })
 
 CreditsTab:CreateSection("Contato")
@@ -1079,6 +1149,10 @@ UserInputService.InputEnded:Connect(function(input)
         stopBoost()
     end
 end)
+
+-- Inicia travas
+startGravityLock()
+startAdhesionLock()
 
 task.spawn(function()
     task.wait(0.8)
