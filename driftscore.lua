@@ -13,7 +13,7 @@ local MIN_SPEED = 25
 local MIN_ANGLE = 20
 local RESET_TIME = 4
 local MAX_MULTIPLIER = 10
-local POINTS_PER_LEVEL = 1500
+local POINTS_PER_LEVEL = 2500
 
 -- Rotação do Texto
 local MAX_TILT_ANGLE = 5     -- Inclinação máxima do texto (graus)
