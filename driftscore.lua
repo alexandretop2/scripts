@@ -16,7 +16,7 @@ local MAX_MULTIPLIER = 10
 local POINTS_PER_LEVEL = 1500
 
 -- Rotação do Texto
-local MAX_TILT_ANGLE = 2     -- Inclinação máxima do texto (graus)
+local MAX_TILT_ANGLE = 5     -- Inclinação máxima do texto (graus)
 local MAX_GAIN_RATE = 500     -- Taxa de ganho por segundo para atingir inclinação máxima
 
 -- ===================== DATA =====================
@@ -40,44 +40,46 @@ ScreenGui.Name = "DriftCounter"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = Player:WaitForChild("PlayerGui")
 
+-- Canvas ajustado para 200x70
 local Canvas = Instance.new("CanvasGroup")
 Canvas.Name = "BRIFT"
-Canvas.Size = UDim2.new(1, 0, 1, 0)
-Canvas.Position = UDim2.new(0, 0, 0, 0)
+Canvas.Size = UDim2.new(0, 200, 0, 70)
+Canvas.Position = UDim2.new(0.04, 0, 0.1, 0)
 Canvas.BackgroundTransparency = 1
 Canvas.GroupTransparency = 0
 Canvas.Parent = ScreenGui
 
+-- ===================== MULTI =====================
+local MultiLabel = Instance.new("TextLabel")
+MultiLabel.Name = "Multi"
+MultiLabel.AnchorPoint = Vector2.new(0.5, 0)
+MultiLabel.Position = UDim2.new(0.55, 0, 0, 0) -- Centralizado no topo
+MultiLabel.Size = UDim2.new(0, 60, 0, 20)
+MultiLabel.BackgroundTransparency = 1
+MultiLabel.Text = "1x"
+MultiLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+MultiLabel.TextSize = 18
+MultiLabel.Font = Enum.Font.GothamBold
+MultiLabel.TextXAlignment = Enum.TextXAlignment.Right -- Texto centralizado
+MultiLabel.Parent = Canvas
+
 -- ===================== POINTS =====================
 local PointsLabel = Instance.new("TextLabel")
 PointsLabel.Name = "Points"
-PointsLabel.AnchorPoint = Vector2.new(0, 0.5)
-PointsLabel.Position = UDim2.new(0.04, 0, 0.12, 0)
-PointsLabel.Size = UDim2.new(0, 320, 0, 55)
+PointsLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+PointsLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+PointsLabel.Size = UDim2.new(1, -20, 0, 0) -- Tamanho solicitado {1, -20}, {0, 0}
 PointsLabel.BackgroundTransparency = 1
 PointsLabel.Text = "0"
 PointsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-PointsLabel.TextSize = 42
+PointsLabel.TextSize = 38
 PointsLabel.Font = Enum.Font.GothamBold
-PointsLabel.TextXAlignment = Enum.TextXAlignment.Left
+PointsLabel.TextXAlignment = Enum.TextXAlignment.Center
 PointsLabel.TextYAlignment = Enum.TextYAlignment.Center
 PointsLabel.Rotation = 0
 PointsLabel.Parent = Canvas
 
--- ===================== MULTI =====================
-local MultiLabel = Instance.new("TextLabel")
-MultiLabel.Name = "Multi"
-MultiLabel.Position = UDim2.new(0.075, 0, 0.065, 0)
-MultiLabel.Size = UDim2.new(0, 120, 0, 28)
-MultiLabel.BackgroundTransparency = 1
-MultiLabel.Text = "1x"
-MultiLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-MultiLabel.TextSize = 22
-MultiLabel.Font = Enum.Font.GothamBold
-MultiLabel.TextXAlignment = Enum.TextXAlignment.Left
-MultiLabel.Parent = Canvas
-
--- ===================== DRAG =====================
+-- ===================== DRAG (ARRASTAR) =====================
 local dragging = false
 local dragStart, startPos
 
@@ -122,7 +124,6 @@ end
 local function CheckTiremarks(car)
 	if not car then return false end
 
-	-- Checa se qualquer uma das rodas principais está soltando fumaça/marcas
 	local wheels = {"RR", "RL", "FR", "FL"}
 	for _, wheelName in ipairs(wheels) do
 		local wheelModel = car:FindFirstChild(wheelName)
@@ -234,9 +235,9 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	LastAngle = Angle
 
-	-- ===== DETECÇÃO DE DRIFT (FÍSICA OU MARCA DE PNEU) =====
+	-- ===== DETECÇÃO DE DRIFT =====
 	local physicsDrift = Speed >= MIN_SPEED and Angle >= MIN_ANGLE
-	local trailDrift = CheckTiremarks(Car) and Speed >= 15 -- Exige velocidade mínima de 15 para não pontuar parado fritando pneu
+	local trailDrift = CheckTiremarks(Car) and Speed >= 15
 
 	local IsDrifting = physicsDrift or trailDrift
 
@@ -244,7 +245,6 @@ RunService.RenderStepped:Connect(function(dt)
 		InChain = true
 		ChainTimer = RESET_TIME
 
-		-- Caso esteja detectando apenas pela fumaça em ângulo baixo, considera o ângulo mínimo para cálculo
 		local effectiveAngle = math.max(Angle, MIN_ANGLE)
 
 		local angleScore = effectiveAngle * 1.8
@@ -272,4 +272,4 @@ RunService.RenderStepped:Connect(function(dt)
 	UpdateUI(dt)
 end)
 
-print("✅ Sistema atualizado com detecção via Tiremarks do Workspace.Cars")
+print("✅ PointsLabel ajustado para {1, -20}, {0, 0} e Multi centralizado")
