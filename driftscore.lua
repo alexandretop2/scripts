@@ -4,6 +4,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local Player = Players.LocalPlayer
 
@@ -12,7 +13,7 @@ local MIN_SPEED = 25
 local MIN_ANGLE = 20
 local RESET_TIME = 4
 local MAX_MULTIPLIER = 10
-local POINTS_PER_LEVEL = 3000
+local POINTS_PER_LEVEL = 1500
 
 -- Rotação do Texto
 local MAX_TILT_ANGLE = 15     -- Inclinação máxima do texto (graus)
@@ -27,7 +28,7 @@ local InChain = false
 local LastAngle = 0
 local GuiVisible = true
 local lastBonusTime = 0
-local currentGainRate = 0     -- Armazena o ganho por segundo atual
+local currentGainRate = 0
 
 -- ===================== REMOVER GUI ANTIGA =====================
 local old = Player:FindFirstChild("PlayerGui") and Player.PlayerGui:FindFirstChild("DriftCounter")
@@ -101,6 +102,43 @@ Canvas.InputEnded:Connect(function(input)
 	end
 end)
 
+-- ===================== DETECTOR DE PNEUS =====================
+local function GetPlayerCar()
+	local carsFolder = Workspace:FindFirstChild("Cars")
+	if not carsFolder then return nil end
+
+	for _, car in ipairs(carsFolder:GetChildren()) do
+		local stats = car:FindFirstChild("Stats")
+		if stats then
+			local owner = stats:FindFirstChild("Owner")
+			if owner and owner.Value == Player.Name then
+				return car
+			end
+		end
+	end
+	return nil
+end
+
+local function CheckTiremarks(car)
+	if not car then return false end
+
+	-- Checa se qualquer uma das rodas principais está soltando fumaça/marcas
+	local wheels = {"RR", "RL", "FR", "FL"}
+	for _, wheelName in ipairs(wheels) do
+		local wheelModel = car:FindFirstChild(wheelName)
+		if wheelModel then
+			local axel = wheelModel:FindFirstChild("Axel")
+			if axel then
+				local trail = axel:FindFirstChild("Tiremarks")
+				if trail and trail:IsA("Trail") and trail.Enabled then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
 -- ===================== FUNÇÕES =====================
 local function UpdateUI(dt)
 	PointsLabel.Text = tostring(math.floor(DriftScore))
@@ -108,14 +146,13 @@ local function UpdateUI(dt)
 	Multiplier = math.clamp(math.floor(DriftScore / POINTS_PER_LEVEL) + 1, 1, MAX_MULTIPLIER)
 	MultiLabel.Text = Multiplier .. "x"
 
-	-- Rotação dinâmica baseada no ganho de pontos
+	-- Rotação dinâmica
 	local targetTilt = 0
 	if InChain and currentGainRate > 0 then
 		local gainRatio = math.clamp(currentGainRate / MAX_GAIN_RATE, 0, 1)
 		targetTilt = -gainRatio * MAX_TILT_ANGLE
 	end
 	
-	-- Suavização na rotação (Lerp) para não estalar o texto
 	PointsLabel.Rotation = math.lerp(PointsLabel.Rotation, targetTilt, math.clamp(dt * 10, 0, 1))
 
 	-- Cores
@@ -173,7 +210,7 @@ RunService.RenderStepped:Connect(function(dt)
 		return
 	end
 
-	local Car = Seat:FindFirstAncestorOfClass("Model")
+	local Car = GetPlayerCar() or Seat:FindFirstAncestorOfClass("Model")
 	if not Car then return end
 
 	local Root = Car.PrimaryPart or Seat
@@ -197,22 +234,28 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	LastAngle = Angle
 
-	-- ===== SISTEMA DE PONTOS =====
-	local IsDrifting = Speed >= MIN_SPEED and Angle >= MIN_ANGLE
+	-- ===== DETECÇÃO DE DRIFT (FÍSICA OU MARCA DE PNEU) =====
+	local physicsDrift = Speed >= MIN_SPEED and Angle >= MIN_ANGLE
+	local trailDrift = CheckTiremarks(Car) and Speed >= 15 -- Exige velocidade mínima de 15 para não pontuar parado fritando pneu
+
+	local IsDrifting = physicsDrift or trailDrift
 
 	if IsDrifting then
 		InChain = true
 		ChainTimer = RESET_TIME
 
-		local angleScore = Angle * 1.8
+		-- Caso esteja detectando apenas pela fumaça em ângulo baixo, considera o ângulo mínimo para cálculo
+		local effectiveAngle = math.max(Angle, MIN_ANGLE)
+
+		local angleScore = effectiveAngle * 1.8
 		local speedScore = Speed * 0.4
 		local highAngleBonus = 0
 
-		if Angle >= 45 then
-			highAngleBonus = (Angle - 45) * 1.2
+		if effectiveAngle >= 45 then
+			highAngleBonus = (effectiveAngle - 45) * 1.2
 		end
-		if Angle >= 60 then
-			highAngleBonus = highAngleBonus + (Angle - 60) * 1.8
+		if effectiveAngle >= 60 then
+			highAngleBonus = highAngleBonus + (effectiveAngle - 60) * 1.8
 		end
 
 		local PointsPerSecond = (angleScore + speedScore + highAngleBonus)
@@ -229,4 +272,4 @@ RunService.RenderStepped:Connect(function(dt)
 	UpdateUI(dt)
 end)
 
-print("✅ Rotação dinâmica por taxa de ganho ativada")
+print("✅ Sistema atualizado com detecção via Tiremarks do Workspace.Cars")
