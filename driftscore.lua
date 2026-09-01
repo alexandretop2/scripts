@@ -16,7 +16,7 @@ local MAX_MULTIPLIER = 10
 local POINTS_PER_LEVEL = 1500
 
 -- Rotação do Texto
-local MAX_TILT_ANGLE = 15     -- Inclinação máxima do texto (graus)
+local MAX_TILT_ANGLE = 5     -- Inclinação máxima do texto (graus)
 local MAX_GAIN_RATE = 350     -- Taxa de ganho por segundo para atingir inclinação máxima
 
 -- ===================== DATA =====================
