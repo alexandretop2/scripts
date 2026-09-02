@@ -346,19 +346,23 @@ local function applyFOV(value)
     currentFOV = math.clamp(tonumber(value) or 70, 1, 120)
     pcall(function()
         local cam = workspace.CurrentCamera
-        if cam then cam.FieldOfView = currentFOV end
+        if cam then
+            cam.FieldOfView = currentFOV
+        end
     end)
 end
 
 local function startFOVLock()
-    if fovConn then return end
-    fovConn = RunService.Heartbeat:Connect(function()
-        pcall(function()
-            local cam = workspace.CurrentCamera
-            if cam and math.abs(cam.FieldOfView - currentFOV) > 0.1 then
-                cam.FieldOfView = currentFOV
-            end
-        end)
+    if fovConn then
+        fovConn:Disconnect()
+        fovConn = nil
+    end
+    -- RenderStepped roda depois do script do jogo e antes do frame ser desenhado
+    fovConn = RunService.RenderStepped:Connect(function()
+        local cam = workspace.CurrentCamera
+        if cam then
+            cam.FieldOfView = currentFOV
+        end
     end)
 end
 
