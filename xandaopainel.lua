@@ -4,10 +4,9 @@
     Nitro • Pulo • Gravidade • Aderência • FOV • Configs
     ───────────────────────────────────────────
     Desenvolvido por: Xandão
-    Versão: 1.2 | Público
+    Versão: 1.3 | Público
     ═══════════════════════════════════════════
 ]]
-
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
@@ -30,6 +29,7 @@ local isBindingKey = false
 local bindingType = nil
 
 local BOOST_FORCE = 1000
+local nitroDirection = "Frente" -- Opções: "Frente", "Trás", "Esquerda", "Direita"
 local JUMP_FORCE = 50
 local isBoosting = false
 local boostConn = nil
@@ -41,6 +41,7 @@ local jumpEnabled = false
 local nitroEffectEnabled = true
 local nitroBtnExists = false
 local jumpBtnExists = false
+
 local nitroColor1Hex = "#FF5500"
 local nitroColor2Hex = "#FFAA00"
 
@@ -199,6 +200,19 @@ end
 -- ─────────────────────────────────────────────
 -- 3. SISTEMAS
 -- ─────────────────────────────────────────────
+local function getNitroVector(root)
+    if not root then return Vector3.zero end
+    if nitroDirection == "Trás" then
+        return -root.CFrame.LookVector * BOOST_FORCE
+    elseif nitroDirection == "Esquerda" then
+        return -root.CFrame.RightVector * BOOST_FORCE
+    elseif nitroDirection == "Direita" then
+        return root.CFrame.RightVector * BOOST_FORCE
+    else
+        return root.CFrame.LookVector * BOOST_FORCE
+    end
+end
+
 local function applyNitroColors()
     local c1 = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0)
     local c2 = hexToColor3(nitroColor2Hex) or Color3.fromRGB(255, 170, 0)
@@ -242,20 +256,22 @@ local function startBoost()
     activeAtt = Instance.new("Attachment")
     activeAtt.Name = "HubBoostAtt"
     activeAtt.Parent = root
+    
     activeForce = Instance.new("VectorForce")
     activeForce.Name = "HubBoostForce"
     activeForce.Attachment0 = activeAtt
     activeForce.RelativeTo = Enum.ActuatorRelativeTo.World
-    activeForce.Force = root.CFrame.LookVector * BOOST_FORCE
+    activeForce.Force = getNitroVector(root)
     activeForce.ApplyAtCenterOfMass = true
     activeForce.Parent = root
+    
     setNitroParticlesEnabled(true)
     isBoosting = true
     boostConn = RunService.Heartbeat:Connect(function()
         if not isBoosting or not nitroEnabled then stopBoost() return end
         local r = getVehicleRoot()
         if not r or not activeForce then stopBoost() return end
-        activeForce.Force = r.CFrame.LookVector * BOOST_FORCE
+        activeForce.Force = getNitroVector(r)
     end)
     return true
 end
@@ -357,7 +373,6 @@ local function startFOVLock()
         fovConn:Disconnect()
         fovConn = nil
     end
-    -- RenderStepped roda depois do script do jogo e antes do frame ser desenhado
     fovConn = RunService.RenderStepped:Connect(function()
         local cam = workspace.CurrentCamera
         if cam then
@@ -419,6 +434,7 @@ local exportCodeBox
 local function getCurrentSettings()
     return {
         nitroForce = BOOST_FORCE,
+        nitroDirection = nitroDirection,
         jumpForce = JUMP_FORCE,
         gravity = currentGravity,
         friction = currentFriction,
@@ -439,6 +455,7 @@ end
 local function applySettings(data)
     if type(data) ~= "table" then return false end
     BOOST_FORCE = tonumber(data.nitroForce) or BOOST_FORCE
+    if data.nitroDirection then nitroDirection = data.nitroDirection end
     JUMP_FORCE = tonumber(data.jumpForce) or JUMP_FORCE
     currentGravity = tonumber(data.gravity) or currentGravity
     workspace.Gravity = currentGravity
@@ -467,6 +484,7 @@ local function applySettings(data)
         if ui.nitroToggle then ui.nitroToggle:Set(nitroEnabled) end
         if ui.nitroEffectToggle then ui.nitroEffectToggle:Set(nitroEffectEnabled) end
         if ui.nitroForceInput then ui.nitroForceInput:Set(tostring(BOOST_FORCE)) end
+        if ui.nitroDropdown then ui.nitroDropdown:Set(nitroDirection) end
         if ui.nitroColor1 then
             local c = hexToColor3(nitroColor1Hex)
             if c then ui.nitroColor1:Set(c) end
@@ -524,7 +542,6 @@ end
 -- 5. UI
 -- ─────────────────────────────────────────────
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
 local Window = Rayfield:CreateWindow({
    Name = "⚡ Painel do Xandão",
    Icon = 0,
@@ -551,12 +568,29 @@ ui.nitroEffectToggle = NitroTab:CreateToggle({
    Name = "Efeito de Partículas (NitroFire)", CurrentValue = true, Flag = "NitroEffect",
    Callback = function(Value) nitroEffectEnabled = Value if not Value then setNitroParticlesEnabled(false) end end,
 })
-NitroTab:CreateSection("Força")
+
+NitroTab:CreateSection("Força e Direção")
 ui.nitroForceInput = NitroTab:CreateInput({
    Name = "Força do Nitro", CurrentValue = tostring(BOOST_FORCE), PlaceholderText = "1000",
    RemoveTextAfterFocusLost = false, Flag = "NitroForce",
    Callback = function(Text) local v = tonumber(Text) if v then BOOST_FORCE = math.max(v, 0) end end,
 })
+
+ui.nitroDropdown = NitroTab:CreateDropdown({
+   Name = "Direção do Nitro",
+   Options = {"Frente", "Trás", "Esquerda", "Direita"},
+   CurrentOption = {"Frente"},
+   MultipleOptions = false,
+   Flag = "NitroDirection",
+   Callback = function(Option)
+       if type(Option) == "table" then
+           nitroDirection = Option[1] or "Frente"
+       else
+           nitroDirection = Option
+       end
+   end,
+})
+
 NitroTab:CreateSection("Cores")
 ui.nitroColor1 = NitroTab:CreateColorPicker({
    Name = "Cor Primária", Color = hexToColor3(nitroColor1Hex) or Color3.fromRGB(255, 85, 0), Flag = "NitroColor1",
@@ -572,6 +606,7 @@ ui.nitroColor2 = NitroTab:CreateColorPicker({
       applyNitroColors()
    end,
 })
+
 NitroTab:CreateSection("Controles")
 NitroTab:CreateButton({
    Name = "📌 Criar / Remover Botão Flutuante",
@@ -592,10 +627,11 @@ nitroKeyBtn = NitroTab:CreateButton({
    Name = "⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]",
    Callback = function() isBindingKey = true bindingType = "nitro" end,
 })
+
 NitroTab:CreateSection("Como usar?")
 NitroTab:CreateParagraph({
    Title = "Nitro",
-   Content = "1. Entre no veículo\n2. Ajuste a força\n3. Segure LeftShift ou o botão flutuante\n4. Solte para parar",
+   Content = "1. Entre no veículo\n2. Ajuste a força e selecione a direção\n3. Segure LeftShift ou o botão flutuante\n4. Solte para parar",
 })
 
 -- PULO
@@ -843,12 +879,12 @@ local CreditsTab = Window:CreateTab("👑 Créditos", 4483362458)
 CreditsTab:CreateSection("Desenvolvedor")
 CreditsTab:CreateParagraph({
    Title = "Painel do Xandão",
-   Content = "Desenvolvido por Xandão\n\nVersão 1.2 — Uso público\nObrigado por utilizar!",
+   Content = "Desenvolvido por Xandão\n\nVersão 1.3 — Uso público\nObrigado por utilizar!",
 })
 CreditsTab:CreateSection("Recursos")
 CreditsTab:CreateParagraph({
    Title = "O que tem no painel",
-   Content = "• Nitro (força + cores)\n• Pulo (Control, começa off)\n• Gravidade travada\n• Aderência com presets\n• FOV 1°–120°\n• Configs por código (copiar/colar)",
+   Content = "• Nitro (força + direção + cores)\n• Pulo (Control, começa off)\n• Gravidade travada\n• Aderência com presets\n• FOV 1°–120°\n• Configs por código (copiar/colar)",
 })
 CreditsTab:CreateSection("Créditos")
 CreditsTab:CreateParagraph({
