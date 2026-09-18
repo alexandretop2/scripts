@@ -17,6 +17,8 @@ local CustomVolumes = {}   -- Volumes customizados (0 - 10)
 local OffStates = {}       -- Controla se o som está em OFF
 local Connections = {}     -- Conexões de escuta dos sons
 local CurrentCarModel = nil
+local ToggleKey = Enum.KeyCode.F -- Tecla padrão para PC
+local ListeningForKey = false
 
 -- Buscar o carro do jogador
 local function GetPlayerCar()
@@ -45,7 +47,7 @@ local function ClearConnections()
     Connections = {}
 end
 
--- Aplicação com suporte a Volume e ID
+-- Aplicação com suporte a Volume e ID (Sem auto-play/prévia)
 local function ApplySoundOverride(soundObj)
     if not soundObj then return end
     
@@ -65,9 +67,6 @@ local function ApplySoundOverride(soundObj)
         end
         if CustomVolumes[key] then
             soundObj.Volume = CustomVolumes[key]
-        end
-        if not soundObj.IsPlaying and soundObj.SoundId ~= "" and soundObj.SoundId ~= "rbxassetid://0" then
-            soundObj:Play()
         end
     end
 
@@ -94,14 +93,14 @@ local function ApplySoundOverride(soundObj)
     }
 end
 
--- Pausar sons secundários ao sair do carro (exceto 'Music')
+-- Pausar TODOS os sons secundários ao sair do carro
 local function StopSecondarySounds()
     local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
     if playerScripts then
         local soundsFolder = playerScripts:FindFirstChild("Sounds")
         if soundsFolder then
             for _, obj in ipairs(soundsFolder:GetChildren()) do
-                if obj:IsA("Sound") and obj.Name ~= "Music" then
+                if obj:IsA("Sound") then
                     obj:Stop()
                 end
             end
@@ -391,7 +390,7 @@ local function ReloadAllSounds()
 
     -- 2. SECUNDÁRIOS (PlayerScripts.Sounds)
     local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
-    if playerScripts then
+    if playerScripts me
         local soundsFolder = playerScripts:FindFirstChild("Sounds")
         if soundsFolder then
             for _, obj in ipairs(soundsFolder:GetChildren()) do
@@ -416,7 +415,6 @@ local function SetupSeatedListener()
             task.wait(0.3)
             ReloadAllSounds()
         else
-            -- Para automaticamente os sons secundários (Supercharger, etc) ao levantar do banco
             StopSecondarySounds()
         end
     end)
@@ -427,43 +425,69 @@ LocalPlayer.CharacterAdded:Connect(SetupSeatedListener)
 
 ReloadAllSounds()
 
--- Rodapé
-local footerLabel = Instance.new("TextLabel")
-footerLabel.Size = UDim2.new(1, 0, 0, 20)
-footerLabel.Position = UDim2.new(0, 0, 0.92, 0)
-footerLabel.BackgroundTransparency = 1
-footerLabel.Text = "Atalho PC: Tecla [F]"
-footerLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-footerLabel.TextSize = 10
-footerLabel.Font = Enum.Font.SourceSans
-footerLabel.Parent = mainFrame
+-- Rodapé com Botão para Mudar a Tecla de Atalho
+local keyBindBtn = Instance.new("TextButton")
+keyBindBtn.Size = UDim2.new(0.92, 0, 0, 22)
+keyBindBtn.Position = UDim2.new(0.04, 0, 0.91, 0)
+keyBindBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+keyBindBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
+keyBindBtn.Text = "Atalho PC: [" .. ToggleKey.Name .. "] (Clique para Mudar)"
+keyBindBtn.TextSize = 10
+keyBindBtn.Font = Enum.Font.SourceSans
+keyBindBtn.Parent = mainFrame
 
--- Botão Flutuante Mobile
-local mobileBtn = Instance.new("TextButton")
-mobileBtn.Name = "MobileToggle"
-mobileBtn.Size = UDim2.new(0, 45, 0, 45)
-mobileBtn.Position = UDim2.new(0.05, 0, 0.25, 0)
-mobileBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-mobileBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-mobileBtn.Text = "🔊"
-mobileBtn.TextSize = 20
-mobileBtn.Active = true
-mobileBtn.Draggable = true
-mobileBtn.Parent = screenGui
+local keyCorner = Instance.new("UICorner")
+keyCorner.CornerRadius = UDim.new(0, 4)
+keyCorner.Parent = keyBindBtn
 
-local floatCorner = Instance.new("UICorner")
-floatCorner.CornerRadius = UDim.new(1, 0)
-floatCorner.Parent = mobileBtn
+keyBindBtn.MouseButton1Click:Connect(function()
+    if ListeningForKey then return end
+    ListeningForKey = true
+    keyBindBtn.Text = "Pressione qualquer tecla..."
+    keyBindBtn.TextColor3 = Color3.fromRGB(255, 200, 50)
+end)
 
-local function ToggleGui()
-    mainFrame.Visible = not mainFrame.Visible
+-- Apenas criar o botão flutuante se for dispositivo MÓVEL
+if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+    local mobileBtn = Instance.new("TextButton")
+    mobileBtn.Name = "MobileToggle"
+    mobileBtn.Size = UDim2.new(0, 45, 0, 45)
+    mobileBtn.Position = UDim2.new(0.05, 0, 0.25, 0)
+    mobileBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    mobileBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    mobileBtn.Text = "🔊"
+    mobileBtn.TextSize = 20
+    mobileBtn.Active = true
+    mobileBtn.Draggable = true
+    mobileBtn.Parent = screenGui
+
+    local floatCorner = Instance.new("UICorner")
+    floatCorner.CornerRadius = UDim.new(1, 0)
+    floatCorner.Parent = mobileBtn
+
+    mobileBtn.MouseButton1Click:Connect(function()
+        mainFrame.Visible = not mainFrame.Visible
+    end)
 end
 
-mobileBtn.MouseButton1Click:Connect(ToggleGui)
-
+-- Detecção de Teclas no Teclado
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- Se estiver aguardando para trocar a tecla
+    if ListeningForKey then
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            ToggleKey = input.KeyCode
+            keyBindBtn.Text = "Atalho PC: [" .. ToggleKey.Name .. "] (Clique para Mudar)"
+            keyBindBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
+            task.wait(0.1)
+            ListeningForKey = false
+        end
+        return
+    end
+
     if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.F then
-        ToggleGui()
+
+    -- Abrir/Fechar menu com a tecla configurada
+    if input.KeyCode == ToggleKey then
+        mainFrame.Visible = not mainFrame.Visible
     end
 end)
