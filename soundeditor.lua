@@ -12,12 +12,13 @@ if oldGui then
 end
 
 -- Estados e Tabelas Globais
-local CustomIDs = {}       -- IDs customizados gravados pelo usuário
-local OffStates = {}       -- Controla quais sons estão OFF
-local Connections = {}     -- Guardador de conexões GetPropertyChangedSignal
+local CustomIDs = {}       -- IDs customizados
+local CustomVolumes = {}   -- Volumes customizados (0 - 10)
+local OffStates = {}       -- Controla se o som está em OFF
+local Connections = {}     -- Conexões de escuta dos sons
 local CurrentCarModel = nil
 
--- Função para buscar o carro pertencente ao jogador
+-- Buscar o carro do jogador
 local function GetPlayerCar()
     local carsFolder = workspace:FindFirstChild("Cars")
     if not carsFolder then return nil end
@@ -36,7 +37,7 @@ local function GetPlayerCar()
     return nil
 end
 
--- Limpar conexões antigas ao trocar de carro
+-- Limpar conexões antigas
 local function ClearConnections()
     for _, conn in pairs(Connections) do
         if conn then conn:Disconnect() end
@@ -44,25 +45,36 @@ local function ClearConnections()
     Connections = {}
 end
 
--- Forçar aplicação e interceptação de scripts que tentam restaurar o som
-local function ApplySoundOverride(soundObj, targetId)
+-- Aplicação com suporte a Volume e ID
+local function ApplySoundOverride(soundObj)
     if not soundObj then return end
     
     local key = soundObj:GetFullName()
+    
+    -- Desconectar hook antigo da mesma instância para recriar
     if Connections[key] then
         Connections[key]:Disconnect()
         Connections[key] = nil
     end
 
-    soundObj.SoundId = targetId
-    if targetId == "rbxassetid://0" then
+    -- Se estiver em OFF, zera o volume ou limpa o ID
+    if OffStates[key] then
+        soundObj.SoundId = "rbxassetid://0"
         soundObj:Stop()
     else
-        soundObj:Play()
+        if CustomIDs[key] then
+            soundObj.SoundId = "rbxassetid://" .. CustomIDs[key]
+        end
+        if CustomVolumes[key] then
+            soundObj.Volume = CustomVolumes[key]
+        end
+        if not soundObj.IsPlaying and soundObj.SoundId ~= "" and soundObj.SoundId ~= "rbxassetid://0" then
+            soundObj:Play()
+        end
     end
 
-    -- Hook: Monitora se o script do carro alterar o SoundId de volta
-    Connections[key] = soundObj:GetPropertyChangedSignal("SoundId"):Connect(function()
+    -- Hook: Impede que o script do A-Chassis/carro sobrescreva o SoundId ou Volume
+    local connId = soundObj:GetPropertyChangedSignal("SoundId"):Connect(function()
         if OffStates[key] and soundObj.SoundId ~= "rbxassetid://0" then
             soundObj.SoundId = "rbxassetid://0"
             soundObj:Stop()
@@ -70,9 +82,22 @@ local function ApplySoundOverride(soundObj, targetId)
             soundObj.SoundId = "rbxassetid://" .. CustomIDs[key]
         end
     end)
+
+    local connVol = soundObj:GetPropertyChangedSignal("Volume"):Connect(function()
+        if not OffStates[key] and CustomVolumes[key] and soundObj.Volume ~= CustomVolumes[key] then
+            soundObj.Volume = CustomVolumes[key]
+        end
+    end)
+
+    Connections[key] = {
+        Disconnect = function()
+            connId:Disconnect()
+            connVol:Disconnect()
+        end
+    }
 end
 
--- Criar a UI
+-- Interface Principal
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CarSoundManagerGui"
 screenGui.ResetOnSpawn = false
@@ -82,8 +107,8 @@ if not screenGui.Parent then screenGui.Parent = LocalPlayer:WaitForChild("Player
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 320, 0, 360)
-mainFrame.Position = UDim2.new(0.5, -160, 0.3, 0)
+mainFrame.Size = UDim2.new(0, 360, 0, 360)
+mainFrame.Position = UDim2.new(0.5, -180, 0.3, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -94,7 +119,6 @@ local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 10)
 corner.Parent = mainFrame
 
--- Título
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 35)
 title.BackgroundTransparency = 1
@@ -104,10 +128,10 @@ title.TextSize = 13
 title.Font = Enum.Font.SourceSansBold
 title.Parent = mainFrame
 
--- Botões de Abas
+-- Abas
 local tabFrame = Instance.new("Frame")
-tabFrame.Size = UDim2.new(0.9, 0, 0, 30)
-tabFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
+tabFrame.Size = UDim2.new(0.92, 0, 0, 30)
+tabFrame.Position = UDim2.new(0.04, 0, 0.1, 0)
 tabFrame.BackgroundTransparency = 1
 tabFrame.Parent = mainFrame
 
@@ -139,10 +163,9 @@ local sTabCorner = Instance.new("UICorner")
 sTabCorner.CornerRadius = UDim.new(0, 6)
 sTabCorner.Parent = secondaryTabBtn
 
--- Descrição da Aba
 local descLabel = Instance.new("TextLabel")
-descLabel.Size = UDim2.new(0.9, 0, 0, 20)
-descLabel.Position = UDim2.new(0.05, 0, 0.19, 0)
+descLabel.Size = UDim2.new(0.92, 0, 0, 20)
+descLabel.Position = UDim2.new(0.04, 0, 0.19, 0)
 descLabel.BackgroundTransparency = 1
 descLabel.Text = "Sons principais localizados no bloco 'Engine' do carro."
 descLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
@@ -150,10 +173,10 @@ descLabel.TextSize = 10
 descLabel.Font = Enum.Font.SourceSansItalic
 descLabel.Parent = mainFrame
 
--- Containers Scrolling
+-- Lists
 local primaryScroll = Instance.new("ScrollingFrame")
-primaryScroll.Size = UDim2.new(0.9, 0, 0, 210)
-primaryScroll.Position = UDim2.new(0.05, 0, 0.26, 0)
+primaryScroll.Size = UDim2.new(0.92, 0, 0, 210)
+primaryScroll.Position = UDim2.new(0.04, 0, 0.26, 0)
 primaryScroll.BackgroundTransparency = 1
 primaryScroll.BorderSizePixel = 0
 primaryScroll.ScrollBarThickness = 4
@@ -166,8 +189,8 @@ pLayout.Padding = UDim.new(0, 6)
 pLayout.Parent = primaryScroll
 
 local secondaryScroll = Instance.new("ScrollingFrame")
-secondaryScroll.Size = UDim2.new(0.9, 0, 0, 210)
-secondaryScroll.Position = UDim2.new(0.05, 0, 0.26, 0)
+secondaryScroll.Size = UDim2.new(0.92, 0, 0, 210)
+secondaryScroll.Position = UDim2.new(0.04, 0, 0.26, 0)
 secondaryScroll.BackgroundTransparency = 1
 secondaryScroll.BorderSizePixel = 0
 secondaryScroll.ScrollBarThickness = 4
@@ -179,7 +202,6 @@ sLayout.SortOrder = Enum.SortOrder.LayoutOrder
 sLayout.Padding = UDim.new(0, 6)
 sLayout.Parent = secondaryScroll
 
--- Alternar entre Abas
 primaryTabBtn.MouseButton1Click:Connect(function()
     primaryScroll.Visible = true
     secondaryScroll.Visible = false
@@ -196,7 +218,7 @@ secondaryTabBtn.MouseButton1Click:Connect(function()
     descLabel.Text = "Sons secundários do jogo (ex: PlayerScripts.Sounds)."
 end)
 
--- Criar Linha de Item
+-- Linha de Configuração do Som
 local function CreateRow(soundObj, parentScroll)
     local soundKey = soundObj:GetFullName()
 
@@ -210,41 +232,62 @@ local function CreateRow(soundObj, parentScroll)
     rowCorner.CornerRadius = UDim.new(0, 6)
     rowCorner.Parent = row
 
+    -- Nome do Som
     local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(0.28, 0, 0.5, 0)
-    nameLabel.Position = UDim2.new(0.03, 0, 0.25, 0)
+    nameLabel.Size = UDim2.new(0.24, 0, 0.5, 0)
+    nameLabel.Position = UDim2.new(0.02, 0, 0.25, 0)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = soundObj.Name
     nameLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
-    nameLabel.TextSize = 11
+    nameLabel.TextSize = 10
     nameLabel.Font = Enum.Font.SourceSansBold
     nameLabel.TextXAlignment = Enum.TextXAlignment.Left
     nameLabel.Parent = row
 
-    local textBox = Instance.new("TextBox")
-    textBox.Size = UDim2.new(0.38, 0, 0.65, 0)
-    textBox.Position = UDim2.new(0.31, 0, 0.175, 0)
-    textBox.BackgroundColor3 = Color3.fromRGB(48, 48, 56)
-    textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    textBox.PlaceholderText = "ID do som"
-    textBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 140)
-    textBox.Text = CustomIDs[soundKey] or soundObj.SoundId:gsub("%D", "")
-    textBox.TextSize = 11
-    textBox.Font = Enum.Font.SourceSans
-    textBox.ClearTextOnFocus = false
-    textBox.Parent = row
+    -- Input do ID
+    local idBox = Instance.new("TextBox")
+    idBox.Size = UDim2.new(0.32, 0, 0.65, 0)
+    idBox.Position = UDim2.new(0.27, 0, 0.175, 0)
+    idBox.BackgroundColor3 = Color3.fromRGB(48, 48, 56)
+    idBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    idBox.PlaceholderText = "ID Áudio"
+    idBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 140)
+    idBox.Text = CustomIDs[soundKey] or soundObj.SoundId:gsub("%D", "")
+    idBox.TextSize = 10
+    idBox.Font = Enum.Font.SourceSans
+    idBox.ClearTextOnFocus = false
+    idBox.Parent = row
 
-    local tbCorner = Instance.new("UICorner")
-    tbCorner.CornerRadius = UDim.new(0, 4)
-    tbCorner.Parent = textBox
+    local idCorner = Instance.new("UICorner")
+    idCorner.CornerRadius = UDim.new(0, 4)
+    idCorner.Parent = idBox
 
+    -- Input de Volume (0-10)
+    local volBox = Instance.new("TextBox")
+    volBox.Size = UDim2.new(0.15, 0, 0.65, 0)
+    volBox.Position = UDim2.new(0.60, 0, 0.175, 0)
+    volBox.BackgroundColor3 = Color3.fromRGB(48, 48, 56)
+    volBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    volBox.PlaceholderText = "Vol(0-10)"
+    volBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 140)
+    volBox.Text = tostring(CustomVolumes[soundKey] or math.clamp(soundObj.Volume, 0, 10))
+    volBox.TextSize = 10
+    volBox.Font = Enum.Font.SourceSans
+    volBox.ClearTextOnFocus = false
+    volBox.Parent = row
+
+    local volCorner = Instance.new("UICorner")
+    volCorner.CornerRadius = UDim.new(0, 4)
+    volCorner.Parent = volBox
+
+    -- Botão Aplicar
     local applyBtn = Instance.new("TextButton")
-    applyBtn.Size = UDim2.new(0.12, 0, 0.65, 0)
-    applyBtn.Position = UDim2.new(0.70, 0, 0.175, 0)
+    applyBtn.Size = UDim2.new(0.10, 0, 0.65, 0)
+    applyBtn.Position = UDim2.new(0.76, 0, 0.175, 0)
     applyBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
     applyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     applyBtn.Text = "OK"
-    applyBtn.TextSize = 11
+    applyBtn.TextSize = 10
     applyBtn.Font = Enum.Font.SourceSansBold
     applyBtn.Parent = row
 
@@ -252,9 +295,10 @@ local function CreateRow(soundObj, parentScroll)
     btnCorner.CornerRadius = UDim.new(0, 4)
     btnCorner.Parent = applyBtn
 
+    -- Botão ON / OFF
     local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0.14, 0, 0.65, 0)
-    toggleBtn.Position = UDim2.new(0.83, 0, 0.175, 0)
+    toggleBtn.Size = UDim2.new(0.11, 0, 0.65, 0)
+    toggleBtn.Position = UDim2.new(0.87, 0, 0.175, 0)
     
     if OffStates[soundKey] then
         toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
@@ -265,7 +309,7 @@ local function CreateRow(soundObj, parentScroll)
     end
     
     toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleBtn.TextSize = 11
+    toggleBtn.TextSize = 10
     toggleBtn.Font = Enum.Font.SourceSansBold
     toggleBtn.Parent = row
 
@@ -273,43 +317,45 @@ local function CreateRow(soundObj, parentScroll)
     togCorner.CornerRadius = UDim.new(0, 4)
     togCorner.Parent = toggleBtn
 
-    -- Lógica OK
+    -- Ação do Botão OK
     applyBtn.MouseButton1Click:Connect(function()
-        local cleanId = textBox.Text:gsub("%D", "")
+        local cleanId = idBox.Text:gsub("%D", "")
+        local volVal = tonumber(volBox.Text)
+
         if cleanId ~= "" then
             CustomIDs[soundKey] = cleanId
-            if not OffStates[soundKey] then
-                ApplySoundOverride(soundObj, "rbxassetid://" .. cleanId)
-            end
-            applyBtn.Text = "✓"
-            task.wait(1)
-            applyBtn.Text = "OK"
         end
+
+        if volVal then
+            -- Limita o volume digitado de 0 a 10
+            volVal = math.clamp(volVal, 0, 10)
+            CustomVolumes[soundKey] = volVal
+            volBox.Text = tostring(volVal)
+        end
+
+        ApplySoundOverride(soundObj)
+
+        applyBtn.Text = "✓"
+        task.wait(0.8)
+        applyBtn.Text = "OK"
     end)
 
-    -- Lógica ON/OFF
+    -- Ação do Botão ON/OFF
     toggleBtn.MouseButton1Click:Connect(function()
         if not OffStates[soundKey] then
             OffStates[soundKey] = true
             toggleBtn.Text = "OFF"
             toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-            ApplySoundOverride(soundObj, "rbxassetid://0")
         else
             OffStates[soundKey] = false
             toggleBtn.Text = "ON"
             toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-            
-            local cleanId = textBox.Text:gsub("%D", "")
-            if cleanId ~= "" and cleanId ~= "0" then
-                ApplySoundOverride(soundObj, "rbxassetid://" .. cleanId)
-            else
-                ApplySoundOverride(soundObj, soundObj.SoundId)
-            end
         end
+        ApplySoundOverride(soundObj)
     end)
 end
 
--- Recarregar Sons do Carro / PlayerScripts
+-- Recarregar interface ao trocar de carro
 local function ReloadAllSounds()
     local car = GetPlayerCar()
     if not car then return end
@@ -318,10 +364,10 @@ local function ReloadAllSounds()
         CurrentCarModel = car
         ClearConnections()
         CustomIDs = {}
+        CustomVolumes = {}
         OffStates = {}
     end
 
-    -- Limpa lista das abas
     for _, child in ipairs(primaryScroll:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
@@ -329,7 +375,7 @@ local function ReloadAllSounds()
         if child:IsA("Frame") then child:Destroy() end
     end
 
-    -- 1. Sons PRIMÁRIOS (Tudo dentro do bloco Engine)
+    -- 1. PRIMÁRIOS (Pasta Engine)
     local engineBlock = car:FindFirstChild("Engine", true)
     if engineBlock then
         for _, obj in ipairs(engineBlock:GetChildren()) do
@@ -339,7 +385,7 @@ local function ReloadAllSounds()
         end
     end
 
-    -- 2. Sons SECUNDÁRIOS (Sons do PlayerScripts/Sounds)
+    -- 2. SECUNDÁRIOS (PlayerScripts.Sounds)
     local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
     if playerScripts then
         local soundsFolder = playerScripts:FindFirstChild("Sounds")
@@ -356,7 +402,7 @@ local function ReloadAllSounds()
     secondaryScroll.CanvasSize = UDim2.new(0, 0, 0, sLayout.AbsoluteContentSize.Y + 10)
 end
 
--- Conectar evento ao sentar
+-- Evento de Sentar
 local function SetupSeatedListener()
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
@@ -385,7 +431,7 @@ footerLabel.TextSize = 10
 footerLabel.Font = Enum.Font.SourceSans
 footerLabel.Parent = mainFrame
 
--- Botão Flutuante Mobile
+-- Botão Flutuante
 local mobileBtn = Instance.new("TextButton")
 mobileBtn.Name = "MobileToggle"
 mobileBtn.Size = UDim2.new(0, 45, 0, 45)
