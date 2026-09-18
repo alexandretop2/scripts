@@ -5,35 +5,19 @@ local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
--- DELETAR INTERFACE ANTIGA SE JÁ EXISTIR
+-- Deletar interface antiga se já existir
 local oldGui = CoreGui:FindFirstChild("CarSoundManagerGui") or LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("CarSoundManagerGui")
 if oldGui then
     oldGui:Destroy()
 end
 
--- Lista base de sons conhecidos
-local BASE_SOUND_NAMES = {"Rev", "Horn", "NitroSound", "Shift", "StartUp", "Supercharger"}
-local SOUND_NAMES = {}
-
--- Tabelas de estado do veículo
-local OriginalIDs = {}
-local UI_Rows = {}
+-- Estados e Tabelas Globais
+local CustomIDs = {}       -- IDs customizados gravados pelo usuário
+local OffStates = {}       -- Controla quais sons estão OFF
+local Connections = {}     -- Guardador de conexões GetPropertyChangedSignal
 local CurrentCarModel = nil
 
--- Limpar listas para um novo carro
-local function ClearSoundData()
-    OriginalIDs = {}
-    SOUND_NAMES = {table.unpack(BASE_SOUND_NAMES)}
-    
-    for sName, rowData in pairs(UI_Rows) do
-        if rowData.Frame then
-            rowData.Frame:Destroy()
-        end
-    end
-    UI_Rows = {}
-end
-
--- Função para buscar o carro pertencente ao jogador em workspace.Cars
+-- Função para buscar o carro pertencente ao jogador
 local function GetPlayerCar()
     local carsFolder = workspace:FindFirstChild("Cars")
     if not carsFolder then return nil end
@@ -52,82 +36,65 @@ local function GetPlayerCar()
     return nil
 end
 
--- Localizar o objeto de som
-local function FindSoundObject(soundName)
-    if soundName == "Supercharger" then
-        local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
-        if playerScripts then
-            local soundsFolder = playerScripts:FindFirstChild("Sounds")
-            if soundsFolder then
-                local scSound = soundsFolder:FindFirstChild("Supercharger")
-                if scSound and scSound:IsA("Sound") then
-                    return scSound
-                end
-            end
-        end
+-- Limpar conexões antigas ao trocar de carro
+local function ClearConnections()
+    for _, conn in pairs(Connections) do
+        if conn then conn:Disconnect() end
     end
-
-    local car = GetPlayerCar()
-    if car then
-        local soundObj = car:FindFirstChild(soundName, true)
-        if soundObj and soundObj:IsA("Sound") then
-            return soundObj
-        end
-    end
-
-    return nil
+    Connections = {}
 end
 
--- Escanear sons adicionais do carro
-local function DetectCarSounds(car)
-    if not car then return end
-    for _, obj in ipairs(car:GetDescendants()) do
-        if obj:IsA("Sound") then
-            if not table.find(SOUND_NAMES, obj.Name) then
-                table.insert(SOUND_NAMES, obj.Name)
-            end
-        end
+-- Forçar aplicação e interceptação de scripts que tentam restaurar o som
+local function ApplySoundOverride(soundObj, targetId)
+    if not soundObj then return end
+    
+    local key = soundObj:GetFullName()
+    if Connections[key] then
+        Connections[key]:Disconnect()
+        Connections[key] = nil
     end
-end
 
--- Forçar atualização instantânea do áudio na memória do jogo
-local function ForceSoundUpdate(soundObj, newId)
-    local wasPlaying = soundObj.IsPlaying
-    soundObj:Stop()
-    soundObj.SoundId = newId
-    task.wait(0.05)
-    if wasPlaying or soundObj.Name == "Rev" then
+    soundObj.SoundId = targetId
+    if targetId == "rbxassetid://0" then
+        soundObj:Stop()
+    else
         soundObj:Play()
     end
+
+    -- Hook: Monitora se o script do carro alterar o SoundId de volta
+    Connections[key] = soundObj:GetPropertyChangedSignal("SoundId"):Connect(function()
+        if OffStates[key] and soundObj.SoundId ~= "rbxassetid://0" then
+            soundObj.SoundId = "rbxassetid://0"
+            soundObj:Stop()
+        elseif CustomIDs[key] and soundObj.SoundId ~= "rbxassetid://" .. CustomIDs[key] then
+            soundObj.SoundId = "rbxassetid://" .. CustomIDs[key]
+        end
+    end)
 end
 
--- Interface Principal
+-- Criar a UI
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CarSoundManagerGui"
 screenGui.ResetOnSpawn = false
 
-pcall(function()
-    screenGui.Parent = CoreGui
-end)
-if not screenGui.Parent then
-    screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
+pcall(function() screenGui.Parent = CoreGui end)
+if not screenGui.Parent then screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 310, 0, 340)
-mainFrame.Position = UDim2.new(0.5, -155, 0.3, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+mainFrame.Size = UDim2.new(0, 320, 0, 360)
+mainFrame.Position = UDim2.new(0.5, -160, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
-mainFrame.Visible = true
 mainFrame.Parent = screenGui
 
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 10)
 corner.Parent = mainFrame
 
+-- Título
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 35)
 title.BackgroundTransparency = 1
@@ -137,29 +104,107 @@ title.TextSize = 13
 title.Font = Enum.Font.SourceSansBold
 title.Parent = mainFrame
 
-local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(0.92, 0, 0, 250)
-scroll.Position = UDim2.new(0.04, 0, 0.12, 0)
-scroll.BackgroundTransparency = 1
-scroll.BorderSizePixel = 0
-scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-scroll.ScrollBarThickness = 4
-scroll.Parent = mainFrame
+-- Botões de Abas
+local tabFrame = Instance.new("Frame")
+tabFrame.Size = UDim2.new(0.9, 0, 0, 30)
+tabFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
+tabFrame.BackgroundTransparency = 1
+tabFrame.Parent = mainFrame
 
-local listLayout = Instance.new("UIListLayout")
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Padding = UDim.new(0, 6)
-listLayout.Parent = scroll
+local primaryTabBtn = Instance.new("TextButton")
+primaryTabBtn.Size = UDim2.new(0.48, 0, 1, 0)
+primaryTabBtn.Position = UDim2.new(0, 0, 0, 0)
+primaryTabBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+primaryTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+primaryTabBtn.Text = "Primários (Carro)"
+primaryTabBtn.TextSize = 11
+primaryTabBtn.Font = Enum.Font.SourceSansBold
+primaryTabBtn.Parent = tabFrame
 
--- Criar linha para cada som
-local function CreateSoundRow(soundName)
-    if UI_Rows[soundName] then return end
+local pTabCorner = Instance.new("UICorner")
+pTabCorner.CornerRadius = UDim.new(0, 6)
+pTabCorner.Parent = primaryTabBtn
+
+local secondaryTabBtn = Instance.new("TextButton")
+secondaryTabBtn.Size = UDim2.new(0.48, 0, 1, 0)
+secondaryTabBtn.Position = UDim2.new(0.52, 0, 0, 0)
+secondaryTabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+secondaryTabBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+secondaryTabBtn.Text = "Secundários (Outros)"
+secondaryTabBtn.TextSize = 11
+secondaryTabBtn.Font = Enum.Font.SourceSansBold
+secondaryTabBtn.Parent = tabFrame
+
+local sTabCorner = Instance.new("UICorner")
+sTabCorner.CornerRadius = UDim.new(0, 6)
+sTabCorner.Parent = secondaryTabBtn
+
+-- Descrição da Aba
+local descLabel = Instance.new("TextLabel")
+descLabel.Size = UDim2.new(0.9, 0, 0, 20)
+descLabel.Position = UDim2.new(0.05, 0, 0.19, 0)
+descLabel.BackgroundTransparency = 1
+descLabel.Text = "Sons principais localizados no bloco 'Engine' do carro."
+descLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
+descLabel.TextSize = 10
+descLabel.Font = Enum.Font.SourceSansItalic
+descLabel.Parent = mainFrame
+
+-- Containers Scrolling
+local primaryScroll = Instance.new("ScrollingFrame")
+primaryScroll.Size = UDim2.new(0.9, 0, 0, 210)
+primaryScroll.Position = UDim2.new(0.05, 0, 0.26, 0)
+primaryScroll.BackgroundTransparency = 1
+primaryScroll.BorderSizePixel = 0
+primaryScroll.ScrollBarThickness = 4
+primaryScroll.Visible = true
+primaryScroll.Parent = mainFrame
+
+local pLayout = Instance.new("UIListLayout")
+pLayout.SortOrder = Enum.SortOrder.LayoutOrder
+pLayout.Padding = UDim.new(0, 6)
+pLayout.Parent = primaryScroll
+
+local secondaryScroll = Instance.new("ScrollingFrame")
+secondaryScroll.Size = UDim2.new(0.9, 0, 0, 210)
+secondaryScroll.Position = UDim2.new(0.05, 0, 0.26, 0)
+secondaryScroll.BackgroundTransparency = 1
+secondaryScroll.BorderSizePixel = 0
+secondaryScroll.ScrollBarThickness = 4
+secondaryScroll.Visible = false
+secondaryScroll.Parent = mainFrame
+
+local sLayout = Instance.new("UIListLayout")
+sLayout.SortOrder = Enum.SortOrder.LayoutOrder
+sLayout.Padding = UDim.new(0, 6)
+sLayout.Parent = secondaryScroll
+
+-- Alternar entre Abas
+primaryTabBtn.MouseButton1Click:Connect(function()
+    primaryScroll.Visible = true
+    secondaryScroll.Visible = false
+    primaryTabBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+    secondaryTabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    descLabel.Text = "Sons principais localizados no bloco 'Engine' do carro."
+end)
+
+secondaryTabBtn.MouseButton1Click:Connect(function()
+    primaryScroll.Visible = false
+    secondaryScroll.Visible = true
+    secondaryTabBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+    primaryTabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    descLabel.Text = "Sons secundários do jogo (ex: PlayerScripts.Sounds)."
+end)
+
+-- Criar Linha de Item
+local function CreateRow(soundObj, parentScroll)
+    local soundKey = soundObj:GetFullName()
 
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -6, 0, 42)
-    row.BackgroundColor3 = Color3.fromRGB(38, 38, 45)
+    row.Size = UDim2.new(1, -6, 0, 40)
+    row.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
     row.BorderSizePixel = 0
-    row.Parent = scroll
+    row.Parent = parentScroll
 
     local rowCorner = Instance.new("UICorner")
     rowCorner.CornerRadius = UDim.new(0, 6)
@@ -169,7 +214,7 @@ local function CreateSoundRow(soundName)
     nameLabel.Size = UDim2.new(0.28, 0, 0.5, 0)
     nameLabel.Position = UDim2.new(0.03, 0, 0.25, 0)
     nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = soundName
+    nameLabel.Text = soundObj.Name
     nameLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
     nameLabel.TextSize = 11
     nameLabel.Font = Enum.Font.SourceSansBold
@@ -179,11 +224,11 @@ local function CreateSoundRow(soundName)
     local textBox = Instance.new("TextBox")
     textBox.Size = UDim2.new(0.38, 0, 0.65, 0)
     textBox.Position = UDim2.new(0.31, 0, 0.175, 0)
-    textBox.BackgroundColor3 = Color3.fromRGB(50, 50, 58)
+    textBox.BackgroundColor3 = Color3.fromRGB(48, 48, 56)
     textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
     textBox.PlaceholderText = "ID do som"
     textBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 140)
-    textBox.Text = ""
+    textBox.Text = CustomIDs[soundKey] or soundObj.SoundId:gsub("%D", "")
     textBox.TextSize = 11
     textBox.Font = Enum.Font.SourceSans
     textBox.ClearTextOnFocus = false
@@ -207,106 +252,111 @@ local function CreateSoundRow(soundName)
     btnCorner.CornerRadius = UDim.new(0, 4)
     btnCorner.Parent = applyBtn
 
-    local toggleSoundBtn = Instance.new("TextButton")
-    toggleSoundBtn.Size = UDim2.new(0.14, 0, 0.65, 0)
-    toggleSoundBtn.Position = UDim2.new(0.83, 0, 0.175, 0)
-    toggleSoundBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-    toggleSoundBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleSoundBtn.Text = "ON"
-    toggleSoundBtn.TextSize = 11
-    toggleSoundBtn.Font = Enum.Font.SourceSansBold
-    toggleSoundBtn.Parent = row
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0.14, 0, 0.65, 0)
+    toggleBtn.Position = UDim2.new(0.83, 0, 0.175, 0)
+    
+    if OffStates[soundKey] then
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        toggleBtn.Text = "OFF"
+    else
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+        toggleBtn.Text = "ON"
+    end
+    
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.TextSize = 11
+    toggleBtn.Font = Enum.Font.SourceSansBold
+    toggleBtn.Parent = row
 
     local togCorner = Instance.new("UICorner")
     togCorner.CornerRadius = UDim.new(0, 4)
-    togCorner.Parent = toggleSoundBtn
+    togCorner.Parent = toggleBtn
 
-    UI_Rows[soundName] = {
-        Frame = row,
-        TextBox = textBox,
-        ToggleBtn = toggleSoundBtn,
-        IsDisabled = false
-    }
-
-    -- Botão OK / Alterar ID
+    -- Lógica OK
     applyBtn.MouseButton1Click:Connect(function()
-        local soundObj = FindSoundObject(soundName)
-        if soundObj then
-            local cleanId = textBox.Text:gsub("%D", "")
-            if cleanId ~= "" then
-                OriginalIDs[soundName] = cleanId
-                if not UI_Rows[soundName].IsDisabled then
-                    ForceSoundUpdate(soundObj, "rbxassetid://" .. cleanId)
-                end
-                applyBtn.Text = "✓"
-                task.wait(1)
-                applyBtn.Text = "OK"
+        local cleanId = textBox.Text:gsub("%D", "")
+        if cleanId ~= "" then
+            CustomIDs[soundKey] = cleanId
+            if not OffStates[soundKey] then
+                ApplySoundOverride(soundObj, "rbxassetid://" .. cleanId)
             end
+            applyBtn.Text = "✓"
+            task.wait(1)
+            applyBtn.Text = "OK"
         end
     end)
 
-    -- Botão ON / OFF
-    toggleSoundBtn.MouseButton1Click:Connect(function()
-        local soundObj = FindSoundObject(soundName)
-        if soundObj then
-            local rowData = UI_Rows[soundName]
+    -- Lógica ON/OFF
+    toggleBtn.MouseButton1Click:Connect(function()
+        if not OffStates[soundKey] then
+            OffStates[soundKey] = true
+            toggleBtn.Text = "OFF"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            ApplySoundOverride(soundObj, "rbxassetid://0")
+        else
+            OffStates[soundKey] = false
+            toggleBtn.Text = "ON"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
             
-            if not rowData.IsDisabled then
-                rowData.IsDisabled = true
-                ForceSoundUpdate(soundObj, "rbxassetid://0")
-                toggleSoundBtn.Text = "OFF"
-                toggleSoundBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            local cleanId = textBox.Text:gsub("%D", "")
+            if cleanId ~= "" and cleanId ~= "0" then
+                ApplySoundOverride(soundObj, "rbxassetid://" .. cleanId)
             else
-                rowData.IsDisabled = false
-                local targetId = rowData.TextBox.Text:gsub("%D", "")
-                if targetId == "" or targetId == "0" then
-                    targetId = OriginalIDs[soundName] or "0"
-                end
-                ForceSoundUpdate(soundObj, "rbxassetid://" .. targetId)
-                toggleSoundBtn.Text = "ON"
-                toggleSoundBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+                ApplySoundOverride(soundObj, soundObj.SoundId)
             end
         end
     end)
-    
-    scroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
 end
 
--- Processar troca ou manutenção de veículo
-local function FetchCurrentSoundIDs()
+-- Recarregar Sons do Carro / PlayerScripts
+local function ReloadAllSounds()
     local car = GetPlayerCar()
     if not car then return end
 
-    -- Verifica se mudou de carro comparando a instância e o nome do modelo
     if CurrentCarModel ~= car then
         CurrentCarModel = car
-        ClearSoundData()
+        ClearConnections()
+        CustomIDs = {}
+        OffStates = {}
     end
 
-    DetectCarSounds(car)
-
-    for _, sName in ipairs(SOUND_NAMES) do
-        CreateSoundRow(sName)
+    -- Limpa lista das abas
+    for _, child in ipairs(primaryScroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    for _, child in ipairs(secondaryScroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
     end
 
-    for _, sName in ipairs(SOUND_NAMES) do
-        local soundObj = FindSoundObject(sName)
-        if soundObj then
-            local rawId = soundObj.SoundId:gsub("%D", "")
-            
-            if rawId ~= "" and rawId ~= "0" then
-                OriginalIDs[sName] = rawId
-                if UI_Rows[sName] then
-                    UI_Rows[sName].TextBox.Text = rawId
-                end
-            elseif UI_Rows[sName] and OriginalIDs[sName] then
-                UI_Rows[sName].TextBox.Text = OriginalIDs[sName]
+    -- 1. Sons PRIMÁRIOS (Tudo dentro do bloco Engine)
+    local engineBlock = car:FindFirstChild("Engine", true)
+    if engineBlock then
+        for _, obj in ipairs(engineBlock:GetChildren()) do
+            if obj:IsA("Sound") then
+                CreateRow(obj, primaryScroll)
             end
         end
     end
+
+    -- 2. Sons SECUNDÁRIOS (Sons do PlayerScripts/Sounds)
+    local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
+    if playerScripts then
+        local soundsFolder = playerScripts:FindFirstChild("Sounds")
+        if soundsFolder then
+            for _, obj in ipairs(soundsFolder:GetChildren()) do
+                if obj:IsA("Sound") then
+                    CreateRow(obj, secondaryScroll)
+                end
+            end
+        end
+    end
+
+    primaryScroll.CanvasSize = UDim2.new(0, 0, 0, pLayout.AbsoluteContentSize.Y + 10)
+    secondaryScroll.CanvasSize = UDim2.new(0, 0, 0, sLayout.AbsoluteContentSize.Y + 10)
 end
 
--- Evento ao sentar no banco
+-- Conectar evento ao sentar
 local function SetupSeatedListener()
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
@@ -314,22 +364,20 @@ local function SetupSeatedListener()
     humanoid.Seated:Connect(function(isSeated, seat)
         if isSeated and seat and seat:IsA("VehicleSeat") then
             task.wait(0.3)
-            FetchCurrentSoundIDs()
+            ReloadAllSounds()
         end
     end)
 end
 
-if LocalPlayer.Character then
-    SetupSeatedListener()
-end
+if LocalPlayer.Character then SetupSeatedListener() end
 LocalPlayer.CharacterAdded:Connect(SetupSeatedListener)
 
-FetchCurrentSoundIDs()
+ReloadAllSounds()
 
 -- Rodapé
 local footerLabel = Instance.new("TextLabel")
-footerLabel.Size = UDim2.new(1, 0, 0, 25)
-footerLabel.Position = UDim2.new(0, 0, 0.9, 0)
+footerLabel.Size = UDim2.new(1, 0, 0, 20)
+footerLabel.Position = UDim2.new(0, 0, 0.92, 0)
 footerLabel.BackgroundTransparency = 1
 footerLabel.Text = "Atalho PC: Tecla [F]"
 footerLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
@@ -338,28 +386,27 @@ footerLabel.Font = Enum.Font.SourceSans
 footerLabel.Parent = mainFrame
 
 -- Botão Flutuante Mobile
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Name = "MobileToggle"
-toggleBtn.Size = UDim2.new(0, 45, 0, 45)
-toggleBtn.Position = UDim2.new(0.05, 0, 0.25, 0)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.Text = "🔊"
-toggleBtn.TextSize = 20
-toggleBtn.Font = Enum.Font.SourceSans
-toggleBtn.Active = true
-toggleBtn.Draggable = true
-toggleBtn.Parent = screenGui
+local mobileBtn = Instance.new("TextButton")
+mobileBtn.Name = "MobileToggle"
+mobileBtn.Size = UDim2.new(0, 45, 0, 45)
+mobileBtn.Position = UDim2.new(0.05, 0, 0.25, 0)
+mobileBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+mobileBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+mobileBtn.Text = "🔊"
+mobileBtn.TextSize = 20
+mobileBtn.Active = true
+mobileBtn.Draggable = true
+mobileBtn.Parent = screenGui
 
 local floatCorner = Instance.new("UICorner")
 floatCorner.CornerRadius = UDim.new(1, 0)
-floatCorner.Parent = toggleBtn
+floatCorner.Parent = mobileBtn
 
 local function ToggleGui()
     mainFrame.Visible = not mainFrame.Visible
 end
 
-toggleBtn.MouseButton1Click:Connect(ToggleGui)
+mobileBtn.MouseButton1Click:Connect(ToggleGui)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
