@@ -5,12 +5,33 @@ local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Lista dos sons conhecidos do carro
-local SOUND_NAMES = {"Rev", "Horn", "NitroSound", "Shift", "StartUp", "Supercharger"}
+-- DELETAR INTERFACE ANTIGA SE JÁ EXISTIR
+local oldGui = CoreGui:FindFirstChild("CarSoundManagerGui") or LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("CarSoundManagerGui")
+if oldGui then
+    oldGui:Destroy()
+end
 
--- Tabela para guardar os IDs originais e referências de UI
+-- Lista base de sons conhecidos
+local BASE_SOUND_NAMES = {"Rev", "Horn", "NitroSound", "Shift", "StartUp", "Supercharger"}
+local SOUND_NAMES = {}
+
+-- Tabelas de estado do veículo
 local OriginalIDs = {}
 local UI_Rows = {}
+local CurrentCarModel = nil
+
+-- Limpar listas para um novo carro
+local function ClearSoundData()
+    OriginalIDs = {}
+    SOUND_NAMES = {table.unpack(BASE_SOUND_NAMES)}
+    
+    for sName, rowData in pairs(UI_Rows) do
+        if rowData.Frame then
+            rowData.Frame:Destroy()
+        end
+    end
+    UI_Rows = {}
+end
 
 -- Função para buscar o carro pertencente ao jogador em workspace.Cars
 local function GetPlayerCar()
@@ -31,9 +52,8 @@ local function GetPlayerCar()
     return nil
 end
 
--- Função para localizar o som (seja no carro ou no PlayerScripts/Sounds)
+-- Localizar o objeto de som
 local function FindSoundObject(soundName)
-    -- Caso 1: Supercharger localizado no PlayerScripts.Sounds
     if soundName == "Supercharger" then
         local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
         if playerScripts then
@@ -47,7 +67,6 @@ local function FindSoundObject(soundName)
         end
     end
 
-    -- Caso 2: Sons gerais localizados dentro do modelo do Carro
     local car = GetPlayerCar()
     if car then
         local soundObj = car:FindFirstChild(soundName, true)
@@ -59,7 +78,7 @@ local function FindSoundObject(soundName)
     return nil
 end
 
--- Escaneia sons extras no modelo do carro
+-- Escanear sons adicionais do carro
 local function DetectCarSounds(car)
     if not car then return end
     for _, obj in ipairs(car:GetDescendants()) do
@@ -68,6 +87,17 @@ local function DetectCarSounds(car)
                 table.insert(SOUND_NAMES, obj.Name)
             end
         end
+    end
+end
+
+-- Forçar atualização instantânea do áudio na memória do jogo
+local function ForceSoundUpdate(soundObj, newId)
+    local wasPlaying = soundObj.IsPlaying
+    soundObj:Stop()
+    soundObj.SoundId = newId
+    task.wait(0.05)
+    if wasPlaying or soundObj.Name == "Rev" then
+        soundObj:Play()
     end
 end
 
@@ -192,6 +222,7 @@ local function CreateSoundRow(soundName)
     togCorner.Parent = toggleSoundBtn
 
     UI_Rows[soundName] = {
+        Frame = row,
         TextBox = textBox,
         ToggleBtn = toggleSoundBtn,
         IsDisabled = false
@@ -205,7 +236,7 @@ local function CreateSoundRow(soundName)
             if cleanId ~= "" then
                 OriginalIDs[soundName] = cleanId
                 if not UI_Rows[soundName].IsDisabled then
-                    soundObj.SoundId = "rbxassetid://" .. cleanId
+                    ForceSoundUpdate(soundObj, "rbxassetid://" .. cleanId)
                 end
                 applyBtn.Text = "✓"
                 task.wait(1)
@@ -222,9 +253,7 @@ local function CreateSoundRow(soundName)
             
             if not rowData.IsDisabled then
                 rowData.IsDisabled = true
-                soundObj.SoundId = "rbxassetid://0"
-                soundObj:Stop()
-                
+                ForceSoundUpdate(soundObj, "rbxassetid://0")
                 toggleSoundBtn.Text = "OFF"
                 toggleSoundBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
             else
@@ -233,8 +262,7 @@ local function CreateSoundRow(soundName)
                 if targetId == "" or targetId == "0" then
                     targetId = OriginalIDs[soundName] or "0"
                 end
-                
-                soundObj.SoundId = "rbxassetid://" .. targetId
+                ForceSoundUpdate(soundObj, "rbxassetid://" .. targetId)
                 toggleSoundBtn.Text = "ON"
                 toggleSoundBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
             end
@@ -244,12 +272,18 @@ local function CreateSoundRow(soundName)
     scroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
 end
 
--- Atualizar e carregar IDs ao sentar
+-- Processar troca ou manutenção de veículo
 local function FetchCurrentSoundIDs()
     local car = GetPlayerCar()
-    if car then
-        DetectCarSounds(car)
+    if not car then return end
+
+    -- Verifica se mudou de carro comparando a instância e o nome do modelo
+    if CurrentCarModel ~= car then
+        CurrentCarModel = car
+        ClearSoundData()
     end
+
+    DetectCarSounds(car)
 
     for _, sName in ipairs(SOUND_NAMES) do
         CreateSoundRow(sName)
@@ -272,7 +306,7 @@ local function FetchCurrentSoundIDs()
     end
 end
 
--- Evento de sentar no banco
+-- Evento ao sentar no banco
 local function SetupSeatedListener()
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
@@ -289,6 +323,8 @@ if LocalPlayer.Character then
     SetupSeatedListener()
 end
 LocalPlayer.CharacterAdded:Connect(SetupSeatedListener)
+
+FetchCurrentSoundIDs()
 
 -- Rodapé
 local footerLabel = Instance.new("TextLabel")
