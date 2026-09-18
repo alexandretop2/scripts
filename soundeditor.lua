@@ -40,7 +40,7 @@ end
 -- Limpar conexões antigas
 local function ClearConnections()
     for _, conn in pairs(Connections) do
-        if conn then conn:Disconnect() end
+        if conn and conn.Disconnect then conn:Disconnect() end
     end
     Connections = {}
 end
@@ -51,13 +51,11 @@ local function ApplySoundOverride(soundObj)
     
     local key = soundObj:GetFullName()
     
-    -- Desconectar hook antigo da mesma instância para recriar
     if Connections[key] then
         Connections[key]:Disconnect()
         Connections[key] = nil
     end
 
-    -- Se estiver em OFF, zera o volume ou limpa o ID
     if OffStates[key] then
         soundObj.SoundId = "rbxassetid://0"
         soundObj:Stop()
@@ -73,7 +71,6 @@ local function ApplySoundOverride(soundObj)
         end
     end
 
-    -- Hook: Impede que o script do A-Chassis/carro sobrescreva o SoundId ou Volume
     local connId = soundObj:GetPropertyChangedSignal("SoundId"):Connect(function()
         if OffStates[key] and soundObj.SoundId ~= "rbxassetid://0" then
             soundObj.SoundId = "rbxassetid://0"
@@ -95,6 +92,21 @@ local function ApplySoundOverride(soundObj)
             connVol:Disconnect()
         end
     }
+end
+
+-- Pausar sons secundários ao sair do carro (exceto 'Music')
+local function StopSecondarySounds()
+    local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
+    if playerScripts then
+        local soundsFolder = playerScripts:FindFirstChild("Sounds")
+        if soundsFolder then
+            for _, obj in ipairs(soundsFolder:GetChildren()) do
+                if obj:IsA("Sound") and obj.Name ~= "Music" then
+                    obj:Stop()
+                end
+            end
+        end
+    end
 end
 
 -- Interface Principal
@@ -232,7 +244,6 @@ local function CreateRow(soundObj, parentScroll)
     rowCorner.CornerRadius = UDim.new(0, 6)
     rowCorner.Parent = row
 
-    -- Nome do Som
     local nameLabel = Instance.new("TextLabel")
     nameLabel.Size = UDim2.new(0.24, 0, 0.5, 0)
     nameLabel.Position = UDim2.new(0.02, 0, 0.25, 0)
@@ -244,7 +255,6 @@ local function CreateRow(soundObj, parentScroll)
     nameLabel.TextXAlignment = Enum.TextXAlignment.Left
     nameLabel.Parent = row
 
-    -- Input do ID
     local idBox = Instance.new("TextBox")
     idBox.Size = UDim2.new(0.32, 0, 0.65, 0)
     idBox.Position = UDim2.new(0.27, 0, 0.175, 0)
@@ -262,7 +272,6 @@ local function CreateRow(soundObj, parentScroll)
     idCorner.CornerRadius = UDim.new(0, 4)
     idCorner.Parent = idBox
 
-    -- Input de Volume (0-10)
     local volBox = Instance.new("TextBox")
     volBox.Size = UDim2.new(0.15, 0, 0.65, 0)
     volBox.Position = UDim2.new(0.60, 0, 0.175, 0)
@@ -280,7 +289,6 @@ local function CreateRow(soundObj, parentScroll)
     volCorner.CornerRadius = UDim.new(0, 4)
     volCorner.Parent = volBox
 
-    -- Botão Aplicar
     local applyBtn = Instance.new("TextButton")
     applyBtn.Size = UDim2.new(0.10, 0, 0.65, 0)
     applyBtn.Position = UDim2.new(0.76, 0, 0.175, 0)
@@ -295,7 +303,6 @@ local function CreateRow(soundObj, parentScroll)
     btnCorner.CornerRadius = UDim.new(0, 4)
     btnCorner.Parent = applyBtn
 
-    -- Botão ON / OFF
     local toggleBtn = Instance.new("TextButton")
     toggleBtn.Size = UDim2.new(0.11, 0, 0.65, 0)
     toggleBtn.Position = UDim2.new(0.87, 0, 0.175, 0)
@@ -317,7 +324,6 @@ local function CreateRow(soundObj, parentScroll)
     togCorner.CornerRadius = UDim.new(0, 4)
     togCorner.Parent = toggleBtn
 
-    -- Ação do Botão OK
     applyBtn.MouseButton1Click:Connect(function()
         local cleanId = idBox.Text:gsub("%D", "")
         local volVal = tonumber(volBox.Text)
@@ -327,7 +333,6 @@ local function CreateRow(soundObj, parentScroll)
         end
 
         if volVal then
-            -- Limita o volume digitado de 0 a 10
             volVal = math.clamp(volVal, 0, 10)
             CustomVolumes[soundKey] = volVal
             volBox.Text = tostring(volVal)
@@ -340,7 +345,6 @@ local function CreateRow(soundObj, parentScroll)
         applyBtn.Text = "OK"
     end)
 
-    -- Ação do Botão ON/OFF
     toggleBtn.MouseButton1Click:Connect(function()
         if not OffStates[soundKey] then
             OffStates[soundKey] = true
@@ -375,7 +379,7 @@ local function ReloadAllSounds()
         if child:IsA("Frame") then child:Destroy() end
     end
 
-    -- 1. PRIMÁRIOS (Pasta Engine)
+    -- 1. PRIMÁRIOS (Engine)
     local engineBlock = car:FindFirstChild("Engine", true)
     if engineBlock then
         for _, obj in ipairs(engineBlock:GetChildren()) do
@@ -402,7 +406,7 @@ local function ReloadAllSounds()
     secondaryScroll.CanvasSize = UDim2.new(0, 0, 0, sLayout.AbsoluteContentSize.Y + 10)
 end
 
--- Evento de Sentar
+-- Conexão ao sentar e levantar do carro
 local function SetupSeatedListener()
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
@@ -411,6 +415,9 @@ local function SetupSeatedListener()
         if isSeated and seat and seat:IsA("VehicleSeat") then
             task.wait(0.3)
             ReloadAllSounds()
+        else
+            -- Para automaticamente os sons secundários (Supercharger, etc) ao levantar do banco
+            StopSecondarySounds()
         end
     end)
 end
@@ -431,7 +438,7 @@ footerLabel.TextSize = 10
 footerLabel.Font = Enum.Font.SourceSans
 footerLabel.Parent = mainFrame
 
--- Botão Flutuante
+-- Botão Flutuante Mobile
 local mobileBtn = Instance.new("TextButton")
 mobileBtn.Name = "MobileToggle"
 mobileBtn.Size = UDim2.new(0, 45, 0, 45)
