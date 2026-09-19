@@ -390,7 +390,7 @@ local function ReloadAllSounds()
 
     -- 2. SECUNDÁRIOS (PlayerScripts.Sounds)
     local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
-    if playerScripts me
+    if playerScripts then
         local soundsFolder = playerScripts:FindFirstChild("Sounds")
         if soundsFolder then
             for _, obj in ipairs(soundsFolder:GetChildren()) do
