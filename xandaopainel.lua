@@ -3,8 +3,8 @@
     ⚡ PAINEL DO XANDÃO
     Nitro • Pulo • Gravidade • Aderência • FOV • Fumaça • Configs
     ───────────────────────────────────────────
-    Desenvolvido por: Xandão
-    Versão: 1.4 | Público
+    Desenvolvedor: Xandão
+    Versão: 1.5 | Público
     ═══════════════════════════════════════════
 ]]
 local UserInputService = game:GetService("UserInputService")
@@ -41,6 +41,7 @@ local jumpEnabled = false
 local nitroEffectEnabled = true
 local nitroBtnExists = false
 local jumpBtnExists = false
+local menuBtnExists = false
 
 local nitroColor1Hex = "#FF5500"
 local nitroColor2Hex = "#FFAA00"
@@ -62,7 +63,7 @@ local currentGravity = workspace.Gravity
 local gravityLockConn = nil
 
 local currentFriction = 1.0
-local adhesionEnabled = true
+local adhesionEnabled = false -- Começa desativado conforme solicitado
 local adhesionConn = nil
 local originalWheelPhys = {}
 
@@ -194,7 +195,6 @@ local function getSmokeParticles()
     if not car then return {} end
     local smokes = {}
     
-    -- Busca priorítaria no caminho informado: SecondaryWheel > Stock > Attachment > Smoke
     for _, desc in ipairs(car:GetDescendants()) do
         if desc:IsA("ParticleEmitter") then
             if desc.Name == "Smoke" or desc.Parent.Name == "Attachment" or desc.Name:lower():find("smoke") or desc.Name:lower():find("fuma") then
@@ -528,7 +528,7 @@ local function applySettings(data)
     currentGravity = tonumber(data.gravity) or currentGravity
     workspace.Gravity = currentGravity
     currentFriction = math.clamp(tonumber(data.friction) or currentFriction, 0, 4)
-    adhesionEnabled = data.adhesionEnabled ~= false
+    adhesionEnabled = data.adhesionEnabled == true
     if data.fov then applyFOV(data.fov) end
     nitroColor1Hex = data.nitroColor1 or nitroColor1Hex
     nitroColor2Hex = data.nitroColor2 or nitroColor2Hex
@@ -562,6 +562,7 @@ local function applySettings(data)
         startAdhesionLock()
     else
         stopAdhesionLock()
+        restoreWheelPhysics()
     end
     return true
 end
@@ -675,7 +676,7 @@ nitroKeyBtn = NitroTab:CreateButton({
    Callback = function() isBindingKey = true bindingType = "nitro" end,
 })
 
--- ABA FUMAÇA (NOVA)
+-- ABA FUMAÇA
 local SmokeTab = Window:CreateTab("🌫️ Fumaça", 4483362458)
 SmokeTab:CreateSection("Ativação")
 ui.smokeToggle = SmokeTab:CreateToggle({
@@ -684,12 +685,20 @@ ui.smokeToggle = SmokeTab:CreateToggle({
 })
 
 SmokeTab:CreateSection("Aparência e ID")
+SmokeTab:CreateParagraph({
+   Title = "🆔 Textura Personalizada",
+   Content = "Insira o ID de um decalque ou imagem do Roblox. Exemplo: 12345678"
+})
 ui.smokeIdInput = SmokeTab:CreateInput({
    Name = "ID da Textura da Fumaça", CurrentValue = smokeTextureId, PlaceholderText = "Cole o ID ou rbxassetid://...",
    RemoveTextAfterFocusLost = false, Flag = "SmokeID",
    Callback = function(Text) smokeTextureId = tostring(Text or "") applySmokeSettings() end,
 })
 
+SmokeTab:CreateParagraph({
+   Title = "🎨 Gradiente de Cores",
+   Content = "A cor inicial é a cor ao sair da roda, e a cor final é a cor da fumaça ao se dissipar."
+})
 ui.smokeColor1 = SmokeTab:CreateColorPicker({
    Name = "Cor Inicial", Color = hexToColor3(smokeColor1Hex) or Color3.fromRGB(255, 255, 255), Flag = "SmokeColor1",
    Callback = function(Value)
@@ -707,6 +716,10 @@ ui.smokeColor2 = SmokeTab:CreateColorPicker({
 })
 
 SmokeTab:CreateSection("Ajustes Físicos")
+SmokeTab:CreateParagraph({
+   Title = "💨 Velocidade e Emissão",
+   Content = "Velocidade: O quão rápido a fumaça se espalha no ar.\nQuantidade: Número de partículas geradas por segundo."
+})
 ui.smokeSpeedSlider = SmokeTab:CreateSlider({
    Name = "Velocidade da Fumaça", Range = {0, 50}, Increment = 1, Suffix = "",
    CurrentValue = smokeSpeed, Flag = "SmokeSpeed",
@@ -719,6 +732,10 @@ ui.smokeRateSlider = SmokeTab:CreateSlider({
    Callback = function(Value) smokeRate = Value applySmokeSettings() end,
 })
 
+SmokeTab:CreateParagraph({
+   Title = "👁️ Transparência e Tamanho",
+   Content = "Transparência: 0 = Fumaça sólida/opaca | 1 = Fumaça invisível.\nTamanho: Largura física das nuvens de fumaça."
+})
 ui.smokeTransSlider = SmokeTab:CreateSlider({
    Name = "Transparência (Opacidade)", Range = {0, 1}, Increment = 0.05, Suffix = "",
    CurrentValue = smokeTransparency, Flag = "SmokeTrans",
@@ -731,6 +748,10 @@ ui.smokeSizeSlider = SmokeTab:CreateSlider({
    Callback = function(Value) smokeSize = Value applySmokeSettings() end,
 })
 
+SmokeTab:CreateParagraph({
+   Title = "⏳ Duração e Rotação",
+   Content = "Tempo de Vida: Quantos segundos a partícula permanece visível no ar.\nRotação: Velocidade de rotação da textura enquanto voa."
+})
 ui.smokeLifeSlider = SmokeTab:CreateSlider({
    Name = "Tempo de Vida (Lifetime)", Range = {0.1, 10}, Increment = 0.1, Suffix = " s",
    CurrentValue = smokeLifetime, Flag = "SmokeLifetime",
@@ -804,7 +825,7 @@ GravityTab:CreateButton({
 local AdhesionTab = Window:CreateTab("🛞 Aderência", 4483362458)
 AdhesionTab:CreateSection("Sistema")
 ui.adhesionToggle = AdhesionTab:CreateToggle({
-   Name = "Ativar Controle de Aderência", CurrentValue = true, Flag = "AdhesionEnabled",
+   Name = "Ativar Controle de Aderência", CurrentValue = false, Flag = "AdhesionEnabled",
    Callback = function(Value)
       adhesionEnabled = Value
       if Value then
@@ -921,11 +942,32 @@ ConfigsTab:CreateButton({
 
 -- AJUSTES
 local SettingsTab = Window:CreateTab("⚙️ Ajustes", 4483362458)
+SettingsTab:CreateSection("Mobile & Botão Flutuante")
+SettingsTab:CreateButton({
+   Name = "📱 Criar / Remover Botão para Abrir/Fechar Painel",
+   Callback = function()
+      if menuBtnExists then
+         local old = floatingGui:FindFirstChild("FloatingMenu")
+         if old then old:Destroy() end
+         menuBtnExists = false
+      else
+         createFloatingButton("FloatingMenu", "⚙️", Color3.fromRGB(50, 50, 50), function()
+            -- Simula o acionamento da tecla do menu (Toggle)
+            if Rayfield and Rayfield.ToggleUI then
+                Rayfield:ToggleUI()
+            end
+         end, false)
+         menuBtnExists = true
+      end
+   end,
+})
+
 SettingsTab:CreateSection("Teclas")
 menuKeyBtn = SettingsTab:CreateButton({
    Name = "⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]",
    Callback = function() isBindingKey = true bindingType = "menu" end,
 })
+
 SettingsTab:CreateSection("Interface")
 ui.menuScaleSlider = SettingsTab:CreateSlider({
    Name = "Escala do Menu", Range = {0.5, 2}, Increment = 0.05, Suffix = "x",
@@ -952,7 +994,7 @@ local CreditsTab = Window:CreateTab("👑 Créditos", 4483362458)
 CreditsTab:CreateSection("Desenvolvedor")
 CreditsTab:CreateParagraph({
    Title = "Painel do Xandão",
-   Content = "Desenvolvido por Xandão\n\nVersão 1.4 — Uso público\nObrigado por utilizar!",
+   Content = "Desenvolvido por Xandão\n\nVersão 1.5 — Uso público\nObrigado por utilizar!",
 })
 
 -- ─────────────────────────────────────────────
@@ -986,6 +1028,5 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 startGravityLock()
-startAdhesionLock()
 startFOVLock()
 applyFOV(currentFOV)
