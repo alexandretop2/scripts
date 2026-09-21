@@ -1,10 +1,10 @@
 --[[
     ═══════════════════════════════════════════
     ⚡ PAINEL DO XANDÃO
-    Nitro • Pulo • Gravidade • Aderência • FOV • Configs
+    Nitro • Pulo • Gravidade • Aderência • FOV • Fumaça • Configs
     ───────────────────────────────────────────
     Desenvolvido por: Xandão
-    Versão: 1.3 | Público
+    Versão: 1.4 | Público
     ═══════════════════════════════════════════
 ]]
 local UserInputService = game:GetService("UserInputService")
@@ -44,6 +44,18 @@ local jumpBtnExists = false
 
 local nitroColor1Hex = "#FF5500"
 local nitroColor2Hex = "#FFAA00"
+
+-- Variáveis de Fumaça
+local smokeEnabled = true
+local smokeTextureId = ""
+local smokeSpeed = 5
+local smokeRate = 20
+local smokeTransparency = 0.5
+local smokeSize = 3
+local smokeLifetime = 2
+local smokeRotSpeed = 0
+local smokeColor1Hex = "#FFFFFF"
+local smokeColor2Hex = "#AAAAAA"
 
 local ORIGINAL_GRAVITY = workspace.Gravity
 local currentGravity = workspace.Gravity
@@ -122,7 +134,7 @@ floatingGui.IgnoreGuiInset = true
 floatingGui.Parent = playerGui
 
 -- ─────────────────────────────────────────────
--- 2. VEÍCULO
+-- 2. VEÍCULO E FUMAÇA
 -- ─────────────────────────────────────────────
 local function getVehicleRoot()
     local char = player.Character
@@ -175,6 +187,51 @@ local function getWheels()
         end
     end
     return wheels
+end
+
+local function getSmokeParticles()
+    local car = getCarModel()
+    if not car then return {} end
+    local smokes = {}
+    
+    -- Busca priorítaria no caminho informado: SecondaryWheel > Stock > Attachment > Smoke
+    for _, desc in ipairs(car:GetDescendants()) do
+        if desc:IsA("ParticleEmitter") then
+            if desc.Name == "Smoke" or desc.Parent.Name == "Attachment" or desc.Name:lower():find("smoke") or desc.Name:lower():find("fuma") then
+                table.insert(smokes, desc)
+            end
+        end
+    end
+    return smokes
+end
+
+local function applySmokeSettings()
+    local smokes = getSmokeParticles()
+    local c1 = hexToColor3(smokeColor1Hex) or Color3.fromRGB(255, 255, 255)
+    local c2 = hexToColor3(smokeColor2Hex) or Color3.fromRGB(170, 170, 170)
+    local colorSeq = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, c1),
+        ColorSequenceKeypoint.new(1, c2),
+    })
+
+    for _, pe in ipairs(smokes) do
+        pe.Enabled = smokeEnabled
+        if smokeTextureId ~= "" then
+            local formattedId = smokeTextureId
+            if not formattedId:find("rbxassetid://") and tonumber(formattedId) then
+                formattedId = "rbxassetid://" .. formattedId
+            end
+            pe.Texture = formattedId
+        end
+        pe.Speed = NumberRange.new(smokeSpeed)
+        pe.Rate = smokeRate
+        pe.Transparency = NumberSequence.new(smokeTransparency)
+        pe.Size = NumberSequence.new(smokeSize)
+        pe.Lifetime = NumberRange.new(smokeLifetime)
+        pe.RotSpeed = NumberRange.new(smokeRotSpeed)
+        pe.Color = colorSeq
+    end
+    return #smokes
 end
 
 local function getNitroParticles()
@@ -449,6 +506,17 @@ local function getCurrentSettings()
         nitroKey = nitroKey.Name,
         jumpKey = jumpKey.Name,
         menuKey = menuKey.Name,
+        -- Smoke Configs
+        smokeEnabled = smokeEnabled,
+        smokeTextureId = smokeTextureId,
+        smokeSpeed = smokeSpeed,
+        smokeRate = smokeRate,
+        smokeTransparency = smokeTransparency,
+        smokeSize = smokeSize,
+        smokeLifetime = smokeLifetime,
+        smokeRotSpeed = smokeRotSpeed,
+        smokeColor1 = smokeColor1Hex,
+        smokeColor2 = smokeColor2Hex,
     }
 end
 
@@ -468,54 +536,33 @@ local function applySettings(data)
     jumpEnabled = data.jumpEnabled == true
     nitroEffectEnabled = data.nitroEffect ~= false
     menuScale = tonumber(data.menuScale) or 1
+    
+    -- Smoke
+    smokeEnabled = data.smokeEnabled ~= false
+    smokeTextureId = data.smokeTextureId or smokeTextureId
+    smokeSpeed = tonumber(data.smokeSpeed) or smokeSpeed
+    smokeRate = tonumber(data.smokeRate) or smokeRate
+    smokeTransparency = tonumber(data.smokeTransparency) or smokeTransparency
+    smokeSize = tonumber(data.smokeSize) or smokeSize
+    smokeLifetime = tonumber(data.smokeLifetime) or smokeLifetime
+    smokeRotSpeed = tonumber(data.smokeRotSpeed) or smokeRotSpeed
+    smokeColor1Hex = data.smokeColor1 or smokeColor1Hex
+    smokeColor2Hex = data.smokeColor2 or smokeColor2Hex
+
     pcall(function()
         if data.nitroKey and Enum.KeyCode[data.nitroKey] then nitroKey = Enum.KeyCode[data.nitroKey] end
         if data.jumpKey and Enum.KeyCode[data.jumpKey] then jumpKey = Enum.KeyCode[data.jumpKey] end
         if data.menuKey and Enum.KeyCode[data.menuKey] then menuKey = Enum.KeyCode[data.menuKey] end
     end)
     applyNitroColors()
+    applySmokeSettings()
+    
     if adhesionEnabled then
         applyFrictionToWheels(currentFriction)
         startAdhesionLock()
     else
         stopAdhesionLock()
     end
-    pcall(function()
-        if ui.nitroToggle then ui.nitroToggle:Set(nitroEnabled) end
-        if ui.nitroEffectToggle then ui.nitroEffectToggle:Set(nitroEffectEnabled) end
-        if ui.nitroForceInput then ui.nitroForceInput:Set(tostring(BOOST_FORCE)) end
-        if ui.nitroDropdown then ui.nitroDropdown:Set(nitroDirection) end
-        if ui.nitroColor1 then
-            local c = hexToColor3(nitroColor1Hex)
-            if c then ui.nitroColor1:Set(c) end
-        end
-        if ui.nitroColor2 then
-            local c = hexToColor3(nitroColor2Hex)
-            if c then ui.nitroColor2:Set(c) end
-        end
-        if ui.jumpToggle then ui.jumpToggle:Set(jumpEnabled) end
-        if ui.jumpForceInput then ui.jumpForceInput:Set(tostring(JUMP_FORCE)) end
-        if ui.gravitySlider then ui.gravitySlider:Set(currentGravity) end
-        if ui.frictionSlider then ui.frictionSlider:Set(currentFriction) end
-        if ui.adhesionToggle then ui.adhesionToggle:Set(adhesionEnabled) end
-        if ui.fovSlider then ui.fovSlider:Set(currentFOV) end
-        if ui.menuScaleSlider then ui.menuScaleSlider:Set(menuScale) end
-        if nitroKeyBtn then nitroKeyBtn:Set("⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]") end
-        if jumpKeyBtn then jumpKeyBtn:Set("⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]") end
-        if menuKeyBtn then menuKeyBtn:Set("⌨️ Tecla Menu: [" .. menuKey.Name .. "]") end
-    end)
-    pcall(function()
-        for _, g in ipairs({game:GetService("CoreGui"), playerGui}) do
-            local rf = g:FindFirstChild("Rayfield") or g:FindFirstChild("RayfieldLibrary")
-            if rf then
-                local main = rf:FindFirstChild("Main", true)
-                if main and main:IsA("GuiObject") then
-                    main.Size = UDim2.new(0, math.floor(500 * menuScale), 0, math.floor(350 * menuScale))
-                    break
-                end
-            end
-        end
-    end)
     return true
 end
 
@@ -628,10 +675,80 @@ nitroKeyBtn = NitroTab:CreateButton({
    Callback = function() isBindingKey = true bindingType = "nitro" end,
 })
 
-NitroTab:CreateSection("Como usar?")
-NitroTab:CreateParagraph({
-   Title = "Nitro",
-   Content = "1. Entre no veículo\n2. Ajuste a força e selecione a direção\n3. Segure LeftShift ou o botão flutuante\n4. Solte para parar",
+-- ABA FUMAÇA (NOVA)
+local SmokeTab = Window:CreateTab("🌫️ Fumaça", 4483362458)
+SmokeTab:CreateSection("Ativação")
+ui.smokeToggle = SmokeTab:CreateToggle({
+   Name = "Ativar Fumaça das Rodas", CurrentValue = true, Flag = "SmokeEnabled",
+   Callback = function(Value) smokeEnabled = Value applySmokeSettings() end,
+})
+
+SmokeTab:CreateSection("Aparência e ID")
+ui.smokeIdInput = SmokeTab:CreateInput({
+   Name = "ID da Textura da Fumaça", CurrentValue = smokeTextureId, PlaceholderText = "Cole o ID ou rbxassetid://...",
+   RemoveTextAfterFocusLost = false, Flag = "SmokeID",
+   Callback = function(Text) smokeTextureId = tostring(Text or "") applySmokeSettings() end,
+})
+
+ui.smokeColor1 = SmokeTab:CreateColorPicker({
+   Name = "Cor Inicial", Color = hexToColor3(smokeColor1Hex) or Color3.fromRGB(255, 255, 255), Flag = "SmokeColor1",
+   Callback = function(Value)
+      smokeColor1Hex = string.format("#%02X%02X%02X", math.floor(Value.R*255), math.floor(Value.G*255), math.floor(Value.B*255))
+      applySmokeSettings()
+   end,
+})
+
+ui.smokeColor2 = SmokeTab:CreateColorPicker({
+   Name = "Cor Final", Color = hexToColor3(smokeColor2Hex) or Color3.fromRGB(170, 170, 170), Flag = "SmokeColor2",
+   Callback = function(Value)
+      smokeColor2Hex = string.format("#%02X%02X%02X", math.floor(Value.R*255), math.floor(Value.G*255), math.floor(Value.B*255))
+      applySmokeSettings()
+   end,
+})
+
+SmokeTab:CreateSection("Ajustes Físicos")
+ui.smokeSpeedSlider = SmokeTab:CreateSlider({
+   Name = "Velocidade da Fumaça", Range = {0, 50}, Increment = 1, Suffix = "",
+   CurrentValue = smokeSpeed, Flag = "SmokeSpeed",
+   Callback = function(Value) smokeSpeed = Value applySmokeSettings() end,
+})
+
+ui.smokeRateSlider = SmokeTab:CreateSlider({
+   Name = "Quantidade (Emissão)", Range = {0, 200}, Increment = 5, Suffix = "/s",
+   CurrentValue = smokeRate, Flag = "SmokeRate",
+   Callback = function(Value) smokeRate = Value applySmokeSettings() end,
+})
+
+ui.smokeTransSlider = SmokeTab:CreateSlider({
+   Name = "Transparência (Opacidade)", Range = {0, 1}, Increment = 0.05, Suffix = "",
+   CurrentValue = smokeTransparency, Flag = "SmokeTrans",
+   Callback = function(Value) smokeTransparency = Value applySmokeSettings() end,
+})
+
+ui.smokeSizeSlider = SmokeTab:CreateSlider({
+   Name = "Tamanho", Range = {0.5, 20}, Increment = 0.5, Suffix = " studs",
+   CurrentValue = smokeSize, Flag = "SmokeSize",
+   Callback = function(Value) smokeSize = Value applySmokeSettings() end,
+})
+
+ui.smokeLifeSlider = SmokeTab:CreateSlider({
+   Name = "Tempo de Vida (Lifetime)", Range = {0.1, 10}, Increment = 0.1, Suffix = " s",
+   CurrentValue = smokeLifetime, Flag = "SmokeLifetime",
+   Callback = function(Value) smokeLifetime = Value applySmokeSettings() end,
+})
+
+ui.smokeRotSlider = SmokeTab:CreateSlider({
+   Name = "Velocidade de Rotação", Range = {-180, 180}, Increment = 5, Suffix = "°/s",
+   CurrentValue = smokeRotSpeed, Flag = "SmokeRotSpeed",
+   Callback = function(Value) smokeRotSpeed = Value applySmokeSettings() end,
+})
+
+SmokeTab:CreateButton({
+   Name = "🔄 Atualizar / Forçar Fumaças",
+   Callback = function()
+      local count = applySmokeSettings()
+      print("Fumaça aplicada em " .. tostring(count) .. " emissores.")
+   end,
 })
 
 -- PULO
@@ -665,11 +782,6 @@ jumpKeyBtn = JumpTab:CreateButton({
    Name = "⌨️ Tecla Pulo: [" .. jumpKey.Name .. "]",
    Callback = function() isBindingKey = true bindingType = "jump" end,
 })
-JumpTab:CreateSection("Como usar?")
-JumpTab:CreateParagraph({
-   Title = "Pulo",
-   Content = "Começa desativado (Space = freio de mão).\nTecla padrão: LeftControl\n1. Ative o pulo\n2. Ajuste a força\n3. Use a tecla ou o botão",
-})
 
 -- GRAVIDADE
 local GravityTab = Window:CreateTab("🌍 Gravidade", 4483362458)
@@ -686,11 +798,6 @@ GravityTab:CreateButton({
       workspace.Gravity = ORIGINAL_GRAVITY
       if ui.gravitySlider then ui.gravitySlider:Set(math.clamp(ORIGINAL_GRAVITY, 0, 1000)) end
    end,
-})
-GravityTab:CreateSection("Como usar?")
-GravityTab:CreateParagraph({
-   Title = "Gravidade",
-   Content = "Sempre travada (anti-reset).\nOriginal: " .. tostring(ORIGINAL_GRAVITY) .. " | Range: 0–1000",
 })
 
 -- ADERÊNCIA
@@ -743,20 +850,6 @@ AdhesionTab:CreateButton({
       if adhesionEnabled then applyFrictionToWheels(currentFriction) end
    end,
 })
-AdhesionTab:CreateButton({
-   Name = "↩️ Restaurar Física Original",
-   Callback = function()
-      stopAdhesionLock()
-      restoreWheelPhysics()
-      adhesionEnabled = false
-      if ui.adhesionToggle then ui.adhesionToggle:Set(false) end
-   end,
-})
-AdhesionTab:CreateSection("Como usar?")
-AdhesionTab:CreateParagraph({
-   Title = "Aderência (CDT)",
-   Content = "1. Entre no veículo\n2. Ative o controle\n3. Slider ou preset\n\nCorrida 1.4 | Drift 0.35 | Sem aderência 0.05\nForçado a cada frame (anti freio de mão).",
-})
 
 -- FOV
 local FOVTab = Window:CreateTab("📷 FOV", 4483362458)
@@ -765,18 +858,6 @@ ui.fovSlider = FOVTab:CreateSlider({
    Name = "FOV", Range = {50, 120}, Increment = 1, Suffix = "°",
    CurrentValue = math.clamp(ORIGINAL_FOV, 50, 120), Flag = "FOV",
    Callback = function(Value) applyFOV(Value) end,
-})
-FOVTab:CreateButton({
-   Name = "↩️ Restaurar FOV Original",
-   Callback = function()
-      applyFOV(ORIGINAL_FOV)
-      if ui.fovSlider then ui.fovSlider:Set(math.clamp(ORIGINAL_FOV, 1, 120)) end
-   end,
-})
-FOVTab:CreateSection("Como usar?")
-FOVTab:CreateParagraph({
-   Title = "FOV",
-   Content = "Campo de visão da câmera.\nMínimo: 1° | Máximo: 120° | Padrão: ~70°\nValor travado para o jogo não resetar.",
 })
 
 -- CONFIGS
@@ -837,16 +918,10 @@ ConfigsTab:CreateButton({
       end
    end,
 })
-ConfigsTab:CreateSection("Como usar?")
-ConfigsTab:CreateParagraph({
-   Title = "Configs por código",
-   Content = "Compartilhar:\n1. Ajuste o painel\n2. Gerar Código\n3. Copiar Código\n4. Envie pro amigo\n\nCarregar:\n1. Cole o código\n2. Carregar Config\n3. A interface atualiza sozinha",
-})
 
 -- AJUSTES
 local SettingsTab = Window:CreateTab("⚙️ Ajustes", 4483362458)
 SettingsTab:CreateSection("Teclas")
-SettingsTab:CreateParagraph({ Title = "Menu", Content = "Abrir/fechar painel: J" })
 menuKeyBtn = SettingsTab:CreateButton({
    Name = "⌨️ Tecla Menu Extra: [" .. menuKey.Name .. "]",
    Callback = function() isBindingKey = true bindingType = "menu" end,
@@ -871,25 +946,13 @@ ui.menuScaleSlider = SettingsTab:CreateSlider({
       end)
    end,
 })
-SettingsTab:CreateSection("Como usar?")
-SettingsTab:CreateParagraph({ Title = "Ajustes", Content = "Tecla extra do menu e tamanho da interface." })
 
 -- CRÉDITOS
 local CreditsTab = Window:CreateTab("👑 Créditos", 4483362458)
 CreditsTab:CreateSection("Desenvolvedor")
 CreditsTab:CreateParagraph({
    Title = "Painel do Xandão",
-   Content = "Desenvolvido por Xandão\n\nVersão 1.3 — Uso público\nObrigado por utilizar!",
-})
-CreditsTab:CreateSection("Recursos")
-CreditsTab:CreateParagraph({
-   Title = "O que tem no painel",
-   Content = "• Nitro (força + direção + cores)\n• Pulo (Control, começa off)\n• Gravidade travada\n• Aderência com presets\n• FOV 1°–120°\n• Configs por código (copiar/colar)",
-})
-CreditsTab:CreateSection("Créditos")
-CreditsTab:CreateParagraph({
-   Title = "Créditos",
-   Content = "Criado por Xandão\nNão remova os créditos.",
+   Content = "Desenvolvido por Xandão\n\nVersão 1.4 — Uso público\nObrigado por utilizar!",
 })
 
 -- ─────────────────────────────────────────────
