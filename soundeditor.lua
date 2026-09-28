@@ -47,7 +47,7 @@ local function ClearConnections()
     Connections = {}
 end
 
--- Aplicação com suporte a Volume e ID (Sem auto-play/prévia)
+-- Aplicação com suporte a Volume e ID sem causar engasgos/lag de áudio
 local function ApplySoundOverride(soundObj)
     if not soundObj then return end
     
@@ -58,32 +58,42 @@ local function ApplySoundOverride(soundObj)
         Connections[key] = nil
     end
 
-    if OffStates[key] then
-        soundObj.SoundId = "rbxassetid://0"
-        soundObj:Stop()
-    else
-        if CustomIDs[key] then
-            soundObj.SoundId = "rbxassetid://" .. CustomIDs[key]
+    local isUpdating = false
+
+    local function EnsureProperties()
+        if isUpdating then return end
+        isUpdating = true
+
+        if OffStates[key] then
+            if soundObj.SoundId ~= "rbxassetid://0" and soundObj.SoundId ~= "" then
+                soundObj.SoundId = "rbxassetid://0"
+                soundObj:Stop()
+            end
+        else
+            if CustomIDs[key] then
+                local targetId = "rbxassetid://" .. CustomIDs[key]
+                -- SÓ altera a propriedade se for diferente para evitar reiniciar o buffer de áudio
+                if soundObj.SoundId ~= targetId then
+                    soundObj.SoundId = targetId
+                end
+            end
+
+            if CustomVolumes[key] then
+                if soundObj.Volume ~= CustomVolumes[key] then
+                    soundObj.Volume = CustomVolumes[key]
+                end
+            end
         end
-        if CustomVolumes[key] then
-            soundObj.Volume = CustomVolumes[key]
-        end
+
+        isUpdating = false
     end
 
-    local connId = soundObj:GetPropertyChangedSignal("SoundId"):Connect(function()
-        if OffStates[key] and soundObj.SoundId ~= "rbxassetid://0" then
-            soundObj.SoundId = "rbxassetid://0"
-            soundObj:Stop()
-        elseif CustomIDs[key] and soundObj.SoundId ~= "rbxassetid://" .. CustomIDs[key] then
-            soundObj.SoundId = "rbxassetid://" .. CustomIDs[key]
-        end
-    end)
+    -- Aplicação inicial
+    EnsureProperties()
 
-    local connVol = soundObj:GetPropertyChangedSignal("Volume"):Connect(function()
-        if not OffStates[key] and CustomVolumes[key] and soundObj.Volume ~= CustomVolumes[key] then
-            soundObj.Volume = CustomVolumes[key]
-        end
-    end)
+    -- Conexões de escuta sem causarem loop infinito nem engasgos
+    local connId = soundObj:GetPropertyChangedSignal("SoundId"):Connect(EnsureProperties)
+    local connVol = soundObj:GetPropertyChangedSignal("Volume"):Connect(EnsureProperties)
 
     Connections[key] = {
         Disconnect = function()
