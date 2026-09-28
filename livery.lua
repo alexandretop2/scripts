@@ -1,7 +1,7 @@
 --[[
-	⚡ LIVERY & TIRE STUDIO PRO (v3.0)
-	Design Moderno • Animações Soft • Destruição da GUI Antiga
-	Auto-conversão de ID/URL • Suporte a Pneus (FR/FL/RR/RL -> Wheel -> Tire)
+	⚡ LIVERY & TIRE STUDIO PRO (v3.1)
+	Estrutura de Rodas: Models (FR, FL, RR, RL) -> Part (Wheel) -> Mesh (Tire)
+	Limpeza de GUI antiga • Conversão de IDs • Animações e Design Profissional
 ]]
 
 local Players = game:GetService("Players")
@@ -11,7 +11,7 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 1. APAGAR INTERFACE ANTIGA CASO EXISTA
+-- 1. DESTRUIR GUI ANTIGA CASO EXISTA
 local oldGui = playerGui:FindFirstChild("LiveryGUI_Pro")
 if oldGui then
 	oldGui:Destroy()
@@ -324,7 +324,7 @@ local partNames = {"Body", "Paint", "Paint1", "Paint2", "Paint3", "Paint4", "Bod
 local partIndex = 1
 local selectedPartName = partNames[1]
 
-local faces = {"Top", "Bottom", "Left", "Right", "Front", "Back"}
+local faces = {"Left", "Right", "Top", "Bottom", "Front", "Back"}
 local faceIndex = 1
 local selectedFace = faces[1]
 
@@ -554,7 +554,7 @@ local TireStatus = Instance.new("TextLabel")
 TireStatus.Size = UDim2.new(1, 0, 0, 60)
 TireStatus.Position = UDim2.new(0, 0, 0, 190)
 TireStatus.BackgroundColor3 = Theme.Card
-TireStatus.Text = "ℹ️ Pneus suportados automaticamente:\nFR, FL, RR, RL ➔ Wheel ➔ Tire"
+TireStatus.Text = "ℹ️ Pneus detectados:\nFR, FL, RR, RL ➔ Part (Wheel) ➔ Mesh (Tire)"
 TireStatus.TextColor3 = Theme.TextMuted
 TireStatus.TextSize = 11
 TireStatus.Font = Enum.Font.Gotham
@@ -578,22 +578,21 @@ local function getCurrentCar()
 	return nil
 end
 
-local function getCarTires(car)
-	local tires = {}
+-- Busca as Part 'Wheel' dentro dos Models 'FR', 'FL', 'RR', 'RL'
+local function getCarWheelParts(car)
+	local wheelParts = {}
 	local wheelNames = {"FR", "FL", "RR", "RL"}
-	for _, wheelName in ipairs(wheelNames) do
-		local wheelModel = car:FindFirstChild(wheelName, true)
+	for _, wheelModelName in ipairs(wheelNames) do
+		local wheelModel = car:FindFirstChild(wheelModelName, true)
 		if wheelModel then
-			local wheelObj = wheelModel:FindFirstChild("Wheel", true)
-			if wheelObj then
-				local tire = wheelObj:FindFirstChild("Tire", true)
-				if tire and tire:IsA("BasePart") then
-					table.insert(tires, tire)
-				end
+			-- Procura a Part 'Wheel'
+			local wheelPart = wheelModel:FindFirstChild("Wheel", true)
+			if wheelPart and wheelPart:IsA("BasePart") then
+				table.insert(wheelParts, wheelPart)
 			end
 		end
 	end
-	return tires
+	return wheelParts
 end
 
 local function applyTireTexture()
@@ -603,9 +602,9 @@ local function applyTireTexture()
 		return
 	end
 
-	local tires = getCarTires(car)
-	if #tires == 0 then
-		warn("❌ Nenhum pneu encontrado no padrão (FR/FL/RR/RL -> Wheel -> Tire)")
+	local wheels = getCarWheelParts(car)
+	if #wheels == 0 then
+		warn("❌ Nenhuma roda encontrada no padrão (FR/FL/RR/RL -> Wheel)")
 		return
 	end
 
@@ -615,9 +614,10 @@ local function applyTireTexture()
 		return
 	end
 
-	for _, tire in ipairs(tires) do
-		for _, child in ipairs(tire:GetChildren()) do
-			if child:IsA("Decal") and child.Face == Enum.NormalId[selectedTireFace] then
+	for _, wheelPart in ipairs(wheels) do
+		-- Remove decal antigo na mesma face da roda
+		for _, child in ipairs(wheelPart:GetChildren()) do
+			if child:IsA("Decal") and (child.Name == "TireTexture" or child.Face == Enum.NormalId[selectedTireFace]) then
 				child:Destroy()
 			end
 		end
@@ -626,19 +626,20 @@ local function applyTireTexture()
 		decal.Name = "TireTexture"
 		decal.Texture = assetId
 		decal.Face = Enum.NormalId[selectedTireFace]
-		decal.Parent = tire
+		decal.Parent = wheelPart
 	end
 
 	TireIdBox.Text = ""
+	print("✅ Textura de pneu aplicada em " .. #wheels .. " rodas na face " .. selectedTireFace)
 end
 
 local function clearTireTextures()
 	local car = getCurrentCar()
 	if not car then return end
-	local tires = getCarTires(car)
-	for _, tire in ipairs(tires) do
-		for _, child in ipairs(tire:GetChildren()) do
-			if child:IsA("Decal") then
+	local wheels = getCarWheelParts(car)
+	for _, wheelPart in ipairs(wheels) do
+		for _, child in ipairs(wheelPart:GetChildren()) do
+			if child:IsA("Decal") and child.Name == "TireTexture" then
 				child:Destroy()
 			end
 		end
@@ -826,7 +827,7 @@ for _, carName in ipairs(LiveryData.CarOrder) do
 	btn.AutoButtonColor = false
 	btn.Parent = CarList
 	addCorner(btn, 6)
-	local stroke = addStroke(btn, Theme.Border, 1)
+	addStroke(btn, Theme.Border, 1)
 
 	btn.MouseEnter:Connect(function()
 		TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.CardHover}):Play()
@@ -922,4 +923,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
 	end
 end)
 
-print("⚡ Livery & Tire Studio PRO v3.0 carregado com sucesso!")
+print("⚡ Livery & Tire Studio PRO v3.1 carregado com sucesso!")
