@@ -1,7 +1,7 @@
 --[[
-	⚡ LIVERY & TIRE STUDIO PRO (v3.1)
-	Estrutura de Rodas: Models (FR, FL, RR, RL) -> Part (Wheel) -> Mesh (Tire)
-	Limpeza de GUI antiga • Conversão de IDs • Animações e Design Profissional
+	⚡ LIVERY & TIRE STUDIO PRO (v3.2)
+	Fix Pneus: Aplicação Fixa na Face LEFT (Wheel Part)
+	Destruição da GUI antiga • Conversão de IDs • Design Moderno
 ]]
 
 local Players = game:GetService("Players")
@@ -11,7 +11,7 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 1. DESTRUIR GUI ANTIGA CASO EXISTA
+-- 1. APAGAR GUI ANTIGA SE EXISTIR
 local oldGui = playerGui:FindFirstChild("LiveryGUI_Pro")
 if oldGui then
 	oldGui:Destroy()
@@ -116,7 +116,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = playerGui
 
--- Toggle Floating Button
+-- Toggle Ball
 local ToggleBall = Instance.new("TextButton")
 ToggleBall.Name = "ToggleBall"
 ToggleBall.Size = UDim2.new(0, 50, 0, 50)
@@ -405,7 +405,6 @@ end, function(lbl)
 	lbl.Text = selectedFace:upper()
 end)
 
--- ID Box
 local IdBox = Instance.new("TextBox")
 IdBox.Size = UDim2.new(1, 0, 0, 38)
 IdBox.Position = UDim2.new(0, 0, 0, 122)
@@ -428,7 +427,6 @@ IdBox.FocusLost:Connect(function()
 	TweenService:Create(idBoxStroke, TweenInfo.new(0.2), {Color = Theme.Border}):Play()
 end)
 
--- Action Buttons
 local ApplyCustomBtn = Instance.new("TextButton")
 ApplyCustomBtn.Size = UDim2.new(1, 0, 0, 36)
 ApplyCustomBtn.Position = UDim2.new(0, 0, 0, 168)
@@ -454,7 +452,6 @@ ClearBtn.Parent = CustomFrame
 addCorner(ClearBtn, 8)
 addStroke(ClearBtn, Theme.Border, 1)
 
--- Custom Decals List
 local ListTitle = Instance.new("TextLabel")
 ListTitle.Size = UDim2.new(1, 0, 0, 14)
 ListTitle.Position = UDim2.new(0, 0, 0, 248)
@@ -488,24 +485,20 @@ TiresFrame.BackgroundTransparency = 1
 TiresFrame.Visible = false
 TiresFrame.Parent = Content
 
-local tireFaceIndex = 1
-local selectedTireFace = faces[1]
-
-createSelector(TiresFrame, 0, "Face no Pneu:", selectedTireFace, function(lbl)
-	tireFaceIndex = tireFaceIndex - 1
-	if tireFaceIndex < 1 then tireFaceIndex = #faces end
-	selectedTireFace = faces[tireFaceIndex]
-	lbl.Text = selectedTireFace:upper()
-end, function(lbl)
-	tireFaceIndex = tireFaceIndex + 1
-	if tireFaceIndex > #faces then tireFaceIndex = 1 end
-	selectedTireFace = faces[tireFaceIndex]
-	lbl.Text = selectedTireFace:upper()
-end)
+local TireInfoTitle = Instance.new("TextLabel")
+TireInfoTitle.Size = UDim2.new(1, 0, 0, 14)
+TireInfoTitle.Position = UDim2.new(0, 0, 0, 0)
+TireInfoTitle.BackgroundTransparency = 1
+TireInfoTitle.Text = "POSIÇÃO FIXA DA TEXTURA: LEFT FACE"
+TireInfoTitle.TextColor3 = Theme.Accent
+TireInfoTitle.TextXAlignment = Enum.TextXAlignment.Left
+TireInfoTitle.TextSize = 11
+TireInfoTitle.Font = Enum.Font.GothamBold
+TireInfoTitle.Parent = TiresFrame
 
 local TireIdBox = Instance.new("TextBox")
 TireIdBox.Size = UDim2.new(1, 0, 0, 38)
-TireIdBox.Position = UDim2.new(0, 0, 0, 62)
+TireIdBox.Position = UDim2.new(0, 0, 0, 24)
 TireIdBox.BackgroundColor3 = Theme.InputBg
 TireIdBox.Text = ""
 TireIdBox.PlaceholderText = "Cole o ID ou URL da Textura do Pneu..."
@@ -526,10 +519,10 @@ TireIdBox.FocusLost:Connect(function()
 end)
 
 local ApplyTireBtn = Instance.new("TextButton")
-ApplyTireBtn.Size = UDim2.new(1, 0, 0, 36)
-ApplyTireBtn.Position = UDim2.new(0, 0, 0, 108)
+ApplyTireBtn.Size = UDim2.new(1, 0, 0, 38)
+ApplyTireBtn.Position = UDim2.new(0, 0, 0, 70)
 ApplyTireBtn.BackgroundColor3 = Theme.Accent
-ApplyTireBtn.Text = "APLICAR NOS PNEUS"
+ApplyTireBtn.Text = "APLICAR NOS PNEUS (LEFT FACE)"
 ApplyTireBtn.TextColor3 = Color3.new(1, 1, 1)
 ApplyTireBtn.TextSize = 13
 ApplyTireBtn.Font = Enum.Font.GothamBold
@@ -538,8 +531,8 @@ ApplyTireBtn.Parent = TiresFrame
 addCorner(ApplyTireBtn, 8)
 
 local ClearTiresBtn = Instance.new("TextButton")
-ClearTiresBtn.Size = UDim2.new(1, 0, 0, 30)
-ClearTiresBtn.Position = UDim2.new(0, 0, 0, 150)
+ClearTiresBtn.Size = UDim2.new(1, 0, 0, 32)
+ClearTiresBtn.Position = UDim2.new(0, 0, 0, 116)
 ClearTiresBtn.BackgroundColor3 = Theme.Card
 ClearTiresBtn.Text = "REMOVER TEXTURA DOS PNEUS"
 ClearTiresBtn.TextColor3 = Theme.TextMuted
@@ -551,13 +544,14 @@ addCorner(ClearTiresBtn, 8)
 addStroke(ClearTiresBtn, Theme.Border, 1)
 
 local TireStatus = Instance.new("TextLabel")
-TireStatus.Size = UDim2.new(1, 0, 0, 60)
-TireStatus.Position = UDim2.new(0, 0, 0, 190)
+TireStatus.Size = UDim2.new(1, 0, 0, 80)
+TireStatus.Position = UDim2.new(0, 0, 0, 158)
 TireStatus.BackgroundColor3 = Theme.Card
-TireStatus.Text = "ℹ️ Pneus detectados:\nFR, FL, RR, RL ➔ Part (Wheel) ➔ Mesh (Tire)"
+TireStatus.Text = "ℹ️ Pneus identificados na estrutura:\nFR, FL, RR, RL ➔ Part (Wheel) ➔ Mesh (Tire)\n\n• A aplicação é feita automaticamente em ambos os lados e ajustada no lado LEFT."
 TireStatus.TextColor3 = Theme.TextMuted
 TireStatus.TextSize = 11
 TireStatus.Font = Enum.Font.Gotham
+TireStatus.TextWrapped = true
 TireStatus.Parent = TiresFrame
 addCorner(TireStatus, 8)
 addStroke(TireStatus, Theme.Border, 1)
@@ -578,14 +572,12 @@ local function getCurrentCar()
 	return nil
 end
 
--- Busca as Part 'Wheel' dentro dos Models 'FR', 'FL', 'RR', 'RL'
 local function getCarWheelParts(car)
 	local wheelParts = {}
 	local wheelNames = {"FR", "FL", "RR", "RL"}
 	for _, wheelModelName in ipairs(wheelNames) do
 		local wheelModel = car:FindFirstChild(wheelModelName, true)
 		if wheelModel then
-			-- Procura a Part 'Wheel'
 			local wheelPart = wheelModel:FindFirstChild("Wheel", true)
 			if wheelPart and wheelPart:IsA("BasePart") then
 				table.insert(wheelParts, wheelPart)
@@ -615,22 +607,32 @@ local function applyTireTexture()
 	end
 
 	for _, wheelPart in ipairs(wheels) do
-		-- Remove decal antigo na mesma face da roda
+		-- Limpa instâncias antigas de textura/decal criadas anteriormente
 		for _, child in ipairs(wheelPart:GetChildren()) do
-			if child:IsA("Decal") and (child.Name == "TireTexture" or child.Face == Enum.NormalId[selectedTireFace]) then
+			if (child:IsA("Decal") or child:IsA("Texture")) and child.Name == "TireTexture" then
 				child:Destroy()
 			end
 		end
 
+		-- Cria Decal na face Left
 		local decal = Instance.new("Decal")
 		decal.Name = "TireTexture"
 		decal.Texture = assetId
-		decal.Face = Enum.NormalId[selectedTireFace]
+		decal.Face = Enum.NormalId.Left
 		decal.Parent = wheelPart
+
+		-- Cria também uma Texture como fallback para suportar meshes UV
+		local tex = Instance.new("Texture")
+		tex.Name = "TireTexture"
+		tex.Texture = assetId
+		tex.Face = Enum.NormalId.Left
+		tex.StudsPerTileU = wheelPart.Size.Y
+		tex.StudsPerTileV = wheelPart.Size.Z
+		tex.Parent = wheelPart
 	end
 
 	TireIdBox.Text = ""
-	print("✅ Textura de pneu aplicada em " .. #wheels .. " rodas na face " .. selectedTireFace)
+	print("✅ Textura de pneu aplicada na face LEFT de " .. #wheels .. " rodas com sucesso!")
 end
 
 local function clearTireTextures()
@@ -639,11 +641,12 @@ local function clearTireTextures()
 	local wheels = getCarWheelParts(car)
 	for _, wheelPart in ipairs(wheels) do
 		for _, child in ipairs(wheelPart:GetChildren()) do
-			if child:IsA("Decal") and child.Name == "TireTexture" then
+			if (child:IsA("Decal") or child:IsA("Texture")) and child.Name == "TireTexture" then
 				child:Destroy()
 			end
 		end
 	end
+	print("✅ Texturas dos pneus removidas!")
 end
 
 local function refreshDecalList()
@@ -923,4 +926,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
 	end
 end)
 
-print("⚡ Livery & Tire Studio PRO v3.1 carregado com sucesso!")
+print("⚡ Livery & Tire Studio PRO v3.2 carregado com sucesso!")
