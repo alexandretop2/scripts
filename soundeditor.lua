@@ -47,7 +47,7 @@ local function ClearConnections()
     Connections = {}
 end
 
--- Aplicação com suporte a Volume e ID sem causar engasgos/lag de áudio
+-- Aplicação sem lag de sincronização de áudio
 local function ApplySoundOverride(soundObj)
     if not soundObj then return end
     
@@ -58,47 +58,50 @@ local function ApplySoundOverride(soundObj)
         Connections[key] = nil
     end
 
-    local isUpdating = false
+    local active = true
 
-    local function EnsureProperties()
-        if isUpdating then return end
-        isUpdating = true
-
-        if OffStates[key] then
-            if soundObj.SoundId ~= "rbxassetid://0" and soundObj.SoundId ~= "" then
-                soundObj.SoundId = "rbxassetid://0"
-                soundObj:Stop()
+    -- Aplicação imediata sem concorrência de loop
+    if OffStates[key] then
+        soundObj.SoundId = "rbxassetid://0"
+        soundObj:Stop()
+    else
+        if CustomIDs[key] then
+            local targetId = "rbxassetid://" .. CustomIDs[key]
+            if soundObj.SoundId ~= targetId then
+                soundObj.SoundId = targetId
             end
-        else
-            if CustomIDs[key] then
-                local targetId = "rbxassetid://" .. CustomIDs[key]
-                -- SÓ altera a propriedade se for diferente para evitar reiniciar o buffer de áudio
-                if soundObj.SoundId ~= targetId then
-                    soundObj.SoundId = targetId
+        end
+        if CustomVolumes[key] then
+            soundObj.Volume = CustomVolumes[key]
+        end
+    end
+
+    -- Monitoramento Suave (Evita travar o buffer do áudio a cada frame do A-Chassis)
+    task.spawn(function()
+        while active and soundObj and soundObj.Parent do
+            task.wait(0.5) -- Checa apenas 2 vezes por segundo para evitar conflito com o pitch/RPM
+            if OffStates[key] then
+                if soundObj.SoundId ~= "rbxassetid://0" then
+                    soundObj.SoundId = "rbxassetid://0"
+                    soundObj:Stop()
                 end
-            end
-
-            if CustomVolumes[key] then
-                if soundObj.Volume ~= CustomVolumes[key] then
+            else
+                if CustomIDs[key] then
+                    local targetId = "rbxassetid://" .. CustomIDs[key]
+                    if soundObj.SoundId ~= targetId then
+                        soundObj.SoundId = targetId
+                    end
+                end
+                if CustomVolumes[key] and math.abs(soundObj.Volume - CustomVolumes[key]) > 0.1 then
                     soundObj.Volume = CustomVolumes[key]
                 end
             end
         end
-
-        isUpdating = false
-    end
-
-    -- Aplicação inicial
-    EnsureProperties()
-
-    -- Conexões de escuta sem causarem loop infinito nem engasgos
-    local connId = soundObj:GetPropertyChangedSignal("SoundId"):Connect(EnsureProperties)
-    local connVol = soundObj:GetPropertyChangedSignal("Volume"):Connect(EnsureProperties)
+    end)
 
     Connections[key] = {
         Disconnect = function()
-            connId:Disconnect()
-            connVol:Disconnect()
+            active = false
         end
     }
 end
@@ -482,7 +485,6 @@ end
 
 -- Detecção de Teclas no Teclado
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    -- Se estiver aguardando para trocar a tecla
     if ListeningForKey then
         if input.UserInputType == Enum.UserInputType.Keyboard then
             ToggleKey = input.KeyCode
@@ -496,7 +498,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
     if gameProcessed then return end
 
-    -- Abrir/Fechar menu com a tecla configurada
     if input.KeyCode == ToggleKey then
         mainFrame.Visible = not mainFrame.Visible
     end
