@@ -1,6 +1,6 @@
 --[[
-    ⚡ LIVERY GUI - Body Paint (Driving Empire Style)
-    Draggable • Mobile ball • Pre-made + Custom with Part + Face selectors
+	⚡ LIVERY GUI - Body Paint & Tire Texture (Driving Empire Style)
+	Draggable • Mobile ball • Pre-made + Custom Decals + Tire Textures
 ]]
 
 local Players = game:GetService("Players")
@@ -125,8 +125,8 @@ end
 -- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 420, 0, 540)
-MainFrame.Position = UDim2.new(0.5, -210, 0.5, -270)
+MainFrame.Size = UDim2.new(0, 430, 0, 560)
+MainFrame.Position = UDim2.new(0.5, -215, 0.5, -280)
 MainFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = false
@@ -153,7 +153,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -50, 1, 0)
 Title.Position = UDim2.new(0, 14, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "⚡  LIVERY"
+Title.Text = "⚡  LIVERY STUDIO"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.TextScaled = true
@@ -200,9 +200,9 @@ TabContainer.Position = UDim2.new(0, 10, 0, 54)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Parent = MainFrame
 
-local function makeTab(name, x)
+local function makeTab(name, x, widthScale)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0.5, -5, 1, 0)
+	btn.Size = UDim2.new(widthScale or 0.32, -4, 1, 0)
 	btn.Position = UDim2.new(x, 0, 0, 0)
 	btn.BackgroundColor3 = Color3.fromRGB(32, 32, 40)
 	btn.Text = name
@@ -214,8 +214,9 @@ local function makeTab(name, x)
 	return btn
 end
 
-local TabLiveries = makeTab("LIVERIES", 0)
-local TabCustom = makeTab("CUSTOM", 0.5)
+local TabLiveries = makeTab("LIVERIES", 0, 0.33)
+local TabCustom = makeTab("CUSTOM", 0.33, 0.33)
+local TabTires = makeTab("PNEUS 🛞", 0.66, 0.34)
 
 local Content = Instance.new("Frame")
 Content.Size = UDim2.new(1, -20, 1, -100)
@@ -272,7 +273,6 @@ CustomFrame.BackgroundTransparency = 1
 CustomFrame.Visible = false
 CustomFrame.Parent = Content
 
--- Part names that the script will look for
 local partNames = {"Body", "Paint", "Paint1", "Paint2", "Paint3", "Paint4", "BodyPaint"}
 local partIndex = 1
 local selectedPartName = partNames[1]
@@ -281,7 +281,7 @@ local faces = {"Top", "Bottom", "Left", "Right", "Front", "Back"}
 local faceIndex = 1
 local selectedFace = faces[1]
 
--- ===== Onde será aplicado =====
+-- Part Selector
 local PartLabel = Instance.new("TextLabel")
 PartLabel.Size = UDim2.new(1, 0, 0, 18)
 PartLabel.Position = UDim2.new(0, 0, 0, 0)
@@ -343,7 +343,7 @@ PartRight.MouseButton1Click:Connect(function()
 	PartNameLabel.Text = selectedPartName
 end)
 
--- ===== Face do decal =====
+-- Face Selector
 local FaceTitle = Instance.new("TextLabel")
 FaceTitle.Size = UDim2.new(1, 0, 0, 18)
 FaceTitle.Position = UDim2.new(0, 0, 0, 60)
@@ -445,7 +445,7 @@ ClearBtn.Font = Enum.Font.GothamSemibold
 ClearBtn.Parent = CustomFrame
 createCorner(ClearBtn, 8)
 
--- Your Decals label
+-- Decal List Title & Container
 local ListTitle = Instance.new("TextLabel")
 ListTitle.Size = UDim2.new(1, 0, 0, 20)
 ListTitle.Position = UDim2.new(0, 0, 0, 248)
@@ -457,7 +457,6 @@ ListTitle.TextScaled = true
 ListTitle.Font = Enum.Font.GothamSemibold
 ListTitle.Parent = CustomFrame
 
--- Decals List
 local DecalList = Instance.new("ScrollingFrame")
 DecalList.Size = UDim2.new(1, 0, 1, -274)
 DecalList.Position = UDim2.new(0, 0, 0, 272)
@@ -480,6 +479,129 @@ listPad.PaddingLeft = UDim.new(0, 6)
 listPad.PaddingRight = UDim.new(0, 6)
 listPad.PaddingBottom = UDim.new(0, 6)
 
+-- ==================== TIRES TAB ====================
+local TiresFrame = Instance.new("Frame")
+TiresFrame.Size = UDim2.new(1, 0, 1, 0)
+TiresFrame.BackgroundTransparency = 1
+TiresFrame.Visible = false
+TiresFrame.Parent = Content
+
+local tireFaceIndex = 1
+local selectedTireFace = faces[1]
+
+-- Tire Face Selector Title & UI
+local TireFaceTitle = Instance.new("TextLabel")
+TireFaceTitle.Size = UDim2.new(1, 0, 0, 18)
+TireFaceTitle.Position = UDim2.new(0, 0, 0, 0)
+TireFaceTitle.BackgroundTransparency = 1
+TireFaceTitle.Text = "Face do Decal nos Pneus:"
+TireFaceTitle.TextColor3 = Color3.fromRGB(150, 150, 165)
+TireFaceTitle.TextXAlignment = Enum.TextXAlignment.Left
+TireFaceTitle.TextScaled = true
+TireFaceTitle.Font = Enum.Font.GothamSemibold
+TireFaceTitle.Parent = TiresFrame
+
+local TireFaceSelector = Instance.new("Frame")
+TireFaceSelector.Size = UDim2.new(1, 0, 0, 36)
+TireFaceSelector.Position = UDim2.new(0, 0, 0, 22)
+TireFaceSelector.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
+TireFaceSelector.Parent = TiresFrame
+createCorner(TireFaceSelector, 8)
+
+local TireFaceLeft = Instance.new("TextButton")
+TireFaceLeft.Size = UDim2.new(0, 40, 1, 0)
+TireFaceLeft.BackgroundTransparency = 1
+TireFaceLeft.Text = "◀"
+TireFaceLeft.TextColor3 = Color3.fromRGB(220, 220, 230)
+TireFaceLeft.TextScaled = true
+TireFaceLeft.Font = Enum.Font.GothamBold
+TireFaceLeft.Parent = TireFaceSelector
+
+local TireFaceLabel = Instance.new("TextLabel")
+TireFaceLabel.Size = UDim2.new(1, -80, 1, 0)
+TireFaceLabel.Position = UDim2.new(0, 40, 0, 0)
+TireFaceLabel.BackgroundTransparency = 1
+TireFaceLabel.Text = selectedTireFace:upper()
+TireFaceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TireFaceLabel.TextScaled = true
+TireFaceLabel.Font = Enum.Font.GothamBold
+TireFaceLabel.Parent = TireFaceSelector
+
+local TireFaceRight = Instance.new("TextButton")
+TireFaceRight.Size = UDim2.new(0, 40, 1, 0)
+TireFaceRight.Position = UDim2.new(1, -40, 0, 0)
+TireFaceRight.BackgroundTransparency = 1
+TireFaceRight.Text = "▶"
+TireFaceRight.TextColor3 = Color3.fromRGB(220, 220, 230)
+TireFaceRight.TextScaled = true
+TireFaceRight.Font = Enum.Font.GothamBold
+TireFaceRight.Parent = TireFaceSelector
+
+TireFaceLeft.MouseButton1Click:Connect(function()
+	tireFaceIndex = tireFaceIndex - 1
+	if tireFaceIndex < 1 then tireFaceIndex = #faces end
+	selectedTireFace = faces[tireFaceIndex]
+	TireFaceLabel.Text = selectedTireFace:upper()
+end)
+
+TireFaceRight.MouseButton1Click:Connect(function()
+	tireFaceIndex = tireFaceIndex + 1
+	if tireFaceIndex > #faces then tireFaceIndex = 1 end
+	selectedTireFace = faces[tireFaceIndex]
+	TireFaceLabel.Text = selectedTireFace:upper()
+end)
+
+-- Tire ID Box
+local TireIdBox = Instance.new("TextBox")
+TireIdBox.Size = UDim2.new(1, 0, 0, 38)
+TireIdBox.Position = UDim2.new(0, 0, 0, 68)
+TireIdBox.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
+TireIdBox.Text = ""
+TireIdBox.PlaceholderText = "ID do Decal do Pneu (ex: 123456789)"
+TireIdBox.PlaceholderColor3 = Color3.fromRGB(90, 90, 100)
+TireIdBox.TextColor3 = Color3.new(1, 1, 1)
+TireIdBox.TextScaled = true
+TireIdBox.Font = Enum.Font.Gotham
+TireIdBox.ClearTextOnFocus = false
+TireIdBox.Parent = TiresFrame
+createCorner(TireIdBox, 8)
+createStroke(TireIdBox, Color3.fromRGB(50, 50, 60), 1)
+
+-- Apply Tire Texture Button
+local ApplyTireBtn = Instance.new("TextButton")
+ApplyTireBtn.Size = UDim2.new(1, 0, 0, 38)
+ApplyTireBtn.Position = UDim2.new(0, 0, 0, 116)
+ApplyTireBtn.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+ApplyTireBtn.Text = "APLICAR NOS PNEUS"
+ApplyTireBtn.TextColor3 = Color3.new(1, 1, 1)
+ApplyTireBtn.TextScaled = true
+ApplyTireBtn.Font = Enum.Font.GothamBold
+ApplyTireBtn.Parent = TiresFrame
+createCorner(ApplyTireBtn, 8)
+
+-- Clear Tire Textures Button
+local ClearTiresBtn = Instance.new("TextButton")
+ClearTiresBtn.Size = UDim2.new(1, 0, 0, 34)
+ClearTiresBtn.Position = UDim2.new(0, 0, 0, 160)
+ClearTiresBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+ClearTiresBtn.Text = "REMOVER TEXTURAS DOS PNEUS"
+ClearTiresBtn.TextColor3 = Color3.fromRGB(210, 210, 220)
+ClearTiresBtn.TextScaled = true
+ClearTiresBtn.Font = Enum.Font.GothamSemibold
+ClearTiresBtn.Parent = TiresFrame
+createCorner(ClearTiresBtn, 8)
+
+-- Status Info Label
+local TireStatus = Instance.new("TextLabel")
+TireStatus.Size = UDim2.new(1, 0, 0, 40)
+TireStatus.Position = UDim2.new(0, 0, 0, 204)
+TireStatus.BackgroundTransparency = 1
+TireStatus.Text = "Estrutura detectada:\nFR, FL, RR, RL ➔ Wheel ➔ Tire"
+TireStatus.TextColor3 = Color3.fromRGB(120, 120, 135)
+TireStatus.TextScaled = true
+TireStatus.Font = Enum.Font.Gotham
+TireStatus.Parent = TiresFrame
+
 -- ==================== LOGIC ====================
 local customDecals = {} -- {partName, face, id, instance}
 
@@ -498,6 +620,84 @@ end
 
 local function findPartByName(car, name)
 	return car:FindFirstChild(name, true)
+end
+
+-- Tire Application Logic (Hierarquia: Carro -> FR/FL/RR/RL -> Wheel -> Tire)
+local wheelNames = {"FR", "FL", "RR", "RL"}
+
+local function getCarTires(car)
+	local tires = {}
+	for _, wheelName in ipairs(wheelNames) do
+		local wheelModel = car:FindFirstChild(wheelName, true)
+		if wheelModel then
+			local wheelObj = wheelModel:FindFirstChild("Wheel", true)
+			if wheelObj then
+				local tire = wheelObj:FindFirstChild("Tire", true)
+				if tire and tire:IsA("BasePart") then
+					table.insert(tires, tire)
+				end
+			end
+		end
+	end
+	return tires
+end
+
+local function applyTireTexture()
+	local car = getCurrentCar()
+	if not car then
+		warn("❌ Sente em um carro primeiro!")
+		return
+	end
+
+	local tires = getCarTires(car)
+	if #tires == 0 then
+		warn("❌ Nenhum pneu encontrado na estrutura (FR/FL/RR/RL -> Wheel -> Tire)!")
+		return
+	end
+
+	local raw = tostring(TireIdBox.Text):gsub("%s+", "")
+	if raw == "" then
+		warn("❌ Digite um ID de decal válido!")
+		return
+	end
+
+	local id = raw
+	if not id:find("rbxassetid://") then
+		id = "rbxassetid://" .. id
+	end
+
+	for _, tire in ipairs(tires) do
+		-- Limpa decals existentes na mesma face do pneu
+		for _, child in ipairs(tire:GetChildren()) do
+			if child:IsA("Decal") and child.Face == Enum.NormalId[selectedTireFace] then
+				child:Destroy()
+			end
+		end
+
+		local decal = Instance.new("Decal")
+		decal.Name = "TireTexture"
+		decal.Texture = id
+		decal.Face = Enum.NormalId[selectedTireFace]
+		decal.Parent = tire
+	end
+
+	TireIdBox.Text = ""
+	print("✅ Textura aplicada em " .. #tires .. " pneus na face " .. selectedTireFace .. "!")
+end
+
+local function clearTireTextures()
+	local car = getCurrentCar()
+	if not car then return end
+
+	local tires = getCarTires(car)
+	for _, tire in ipairs(tires) do
+		for _, child in ipairs(tire:GetChildren()) do
+			if child:IsA("Decal") then
+				child:Destroy()
+			end
+		end
+	end
+	print("✅ Texturas dos pneus removidas!")
 end
 
 local function refreshDecalList()
@@ -591,7 +791,6 @@ local function applyCustomDecal()
 		id = "rbxassetid://" .. id
 	end
 
-	-- remove existing on same part + face
 	for i = #customDecals, 1, -1 do
 		if customDecals[i].partName == selectedPartName and customDecals[i].face == selectedFace then
 			if customDecals[i].instance and customDecals[i].instance.Parent then
@@ -601,7 +800,6 @@ local function applyCustomDecal()
 		end
 	end
 
-	-- also clear leftover decal on that face of the part
 	for _, child in ipairs(part:GetChildren()) do
 		if child:IsA("Decal") and child.Face == Enum.NormalId[selectedFace] then
 			child:Destroy()
@@ -644,7 +842,6 @@ end
 local function applyLivery(car, livery)
 	if not car then return false end
 
-	-- limpa todos os decals do carro
 	for _, part in ipairs(car:GetDescendants()) do
 		if part:IsA("BasePart") then
 			for _, child in ipairs(part:GetChildren()) do
@@ -655,14 +852,11 @@ local function applyLivery(car, livery)
 		end
 	end
 
-	-- nomes que o script tenta quando o nome original não existe
 	local fallbackNames = {"Body", "Paint", "Paint1", "Paint2", "Paint3", "Paint4", "BodyPaint", "Body2", "Chassis"}
 
-	-- aplica decals
 	for partName, faceTable in pairs(livery.Decals or {}) do
 		local part = car:FindFirstChild(partName, true)
 
-		-- se não achou o nome original, tenta os fallbacks
 		if not part then
 			for _, name in ipairs(fallbackNames) do
 				part = car:FindFirstChild(name, true)
@@ -686,7 +880,6 @@ local function applyLivery(car, livery)
 		end
 	end
 
-	-- aplica cores
 	for partName, color in pairs(livery.Colors or {}) do
 		local part = car:FindFirstChild(partName, true)
 
@@ -750,26 +943,34 @@ for _, carName in ipairs(LiveryData.CarOrder) do
 	end)
 end
 
--- Tabs
-local function setTab(isLiveries)
-	TabLiveries.BackgroundColor3 = isLiveries and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(32, 32, 40)
-	TabLiveries.TextColor3 = isLiveries and Color3.new(1,1,1) or Color3.fromRGB(160, 160, 175)
-	TabCustom.BackgroundColor3 = (not isLiveries) and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(32, 32, 40)
-	TabCustom.TextColor3 = (not isLiveries) and Color3.new(1,1,1) or Color3.fromRGB(160, 160, 175)
+-- Tabs Navigation Logic
+local function setTab(activeTab)
+	TabLiveries.BackgroundColor3 = (activeTab == 1) and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(32, 32, 40)
+	TabLiveries.TextColor3 = (activeTab == 1) and Color3.new(1,1,1) or Color3.fromRGB(160, 160, 175)
 
-	LiveriesFrame.Visible = isLiveries
-	CustomFrame.Visible = not isLiveries
+	TabCustom.BackgroundColor3 = (activeTab == 2) and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(32, 32, 40)
+	TabCustom.TextColor3 = (activeTab == 2) and Color3.new(1,1,1) or Color3.fromRGB(160, 160, 175)
+
+	TabTires.BackgroundColor3 = (activeTab == 3) and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(32, 32, 40)
+	TabTires.TextColor3 = (activeTab == 3) and Color3.new(1,1,1) or Color3.fromRGB(160, 160, 175)
+
+	LiveriesFrame.Visible = (activeTab == 1)
+	CustomFrame.Visible = (activeTab == 2)
+	TiresFrame.Visible = (activeTab == 3)
 end
 
-TabLiveries.MouseButton1Click:Connect(function() setTab(true) end)
-TabCustom.MouseButton1Click:Connect(function() setTab(false) end)
-setTab(true)
+TabLiveries.MouseButton1Click:Connect(function() setTab(1) end)
+TabCustom.MouseButton1Click:Connect(function() setTab(2) end)
+TabTires.MouseButton1Click:Connect(function() setTab(3) end)
+setTab(1)
 
--- Buttons
+-- Button Binds
 ApplyCustomBtn.MouseButton1Click:Connect(applyCustomDecal)
 ClearBtn.MouseButton1Click:Connect(clearAllDecals)
+ApplyTireBtn.MouseButton1Click:Connect(applyTireTexture)
+ClearTiresBtn.MouseButton1Click:Connect(clearTireTextures)
 
--- Toggle
+-- Toggle Menu Logic
 local function togglePanel()
 	MainFrame.Visible = not MainFrame.Visible
 end
@@ -784,4 +985,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
 	end
 end)
 
-print("🎉 Livery GUI Pro loaded!  •  Right Shift or ⚡ ball")
+print("🎉 Livery & Tire GUI Pro loaded! • Right Shift or ⚡ ball")
