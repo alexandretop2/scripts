@@ -1,7 +1,7 @@
 --[[
-	⚡ LIVERY & TIRE STUDIO PRO (v3.2)
-	Fix Pneus: Aplicação Fixa na Face LEFT (Wheel Part)
-	Destruição da GUI antiga • Conversão de IDs • Design Moderno
+	⚡ LIVERY & TIRE STUDIO PRO (v3.3)
+	Fix Avançado: Alteração direta de TextureId em MeshPart / SpecialMesh / FileMesh
+	Destruição da GUI antiga • Auto-conversão de IDs • Pneu em Face LEFT
 ]]
 
 local Players = game:GetService("Players")
@@ -11,7 +11,7 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 1. APAGAR GUI ANTIGA SE EXISTIR
+-- 1. DESTRUIR GUI ANTIGA SE EXISTIR
 local oldGui = playerGui:FindFirstChild("LiveryGUI_Pro")
 if oldGui then
 	oldGui:Destroy()
@@ -522,7 +522,7 @@ local ApplyTireBtn = Instance.new("TextButton")
 ApplyTireBtn.Size = UDim2.new(1, 0, 0, 38)
 ApplyTireBtn.Position = UDim2.new(0, 0, 0, 70)
 ApplyTireBtn.BackgroundColor3 = Theme.Accent
-ApplyTireBtn.Text = "APLICAR NOS PNEUS (LEFT FACE)"
+ApplyTireBtn.Text = "APLICAR NOS PNEUS (MESH & PART)"
 ApplyTireBtn.TextColor3 = Color3.new(1, 1, 1)
 ApplyTireBtn.TextSize = 13
 ApplyTireBtn.Font = Enum.Font.GothamBold
@@ -547,7 +547,7 @@ local TireStatus = Instance.new("TextLabel")
 TireStatus.Size = UDim2.new(1, 0, 0, 80)
 TireStatus.Position = UDim2.new(0, 0, 0, 158)
 TireStatus.BackgroundColor3 = Theme.Card
-TireStatus.Text = "ℹ️ Pneus identificados na estrutura:\nFR, FL, RR, RL ➔ Part (Wheel) ➔ Mesh (Tire)\n\n• A aplicação é feita automaticamente em ambos os lados e ajustada no lado LEFT."
+TireStatus.Text = "ℹ️ Estrutura suportada:\nFR, FL, RR, RL ➔ Wheel (Part / MeshPart) ➔ Tire (Mesh)\n\n• Modifica diretamente a TextureID da Mesh3D e insere Decal/Texture na face LEFT."
 TireStatus.TextColor3 = Theme.TextMuted
 TireStatus.TextSize = 11
 TireStatus.Font = Enum.Font.Gotham
@@ -572,19 +572,25 @@ local function getCurrentCar()
 	return nil
 end
 
-local function getCarWheelParts(car)
-	local wheelParts = {}
+-- Retorna a lista de rodas (FR, FL, RR, RL) e seus componentes (Wheel e Tire Mesh)
+local function getCarWheelData(car)
+	local wheelDataList = {}
 	local wheelNames = {"FR", "FL", "RR", "RL"}
+
 	for _, wheelModelName in ipairs(wheelNames) do
 		local wheelModel = car:FindFirstChild(wheelModelName, true)
 		if wheelModel then
-			local wheelPart = wheelModel:FindFirstChild("Wheel", true)
-			if wheelPart and wheelPart:IsA("BasePart") then
-				table.insert(wheelParts, wheelPart)
+			local wheelObj = wheelModel:FindFirstChild("Wheel", true)
+			if wheelObj then
+				local tireMesh = wheelObj:FindFirstChild("Tire", true) or wheelObj:FindFirstChildOfClass("SpecialMesh") or wheelObj:FindFirstChildOfClass("FileMesh")
+				table.insert(wheelDataList, {
+					Wheel = wheelObj,
+					TireMesh = tireMesh
+				})
 			end
 		end
 	end
-	return wheelParts
+	return wheelDataList
 end
 
 local function applyTireTexture()
@@ -594,9 +600,9 @@ local function applyTireTexture()
 		return
 	end
 
-	local wheels = getCarWheelParts(car)
-	if #wheels == 0 then
-		warn("❌ Nenhuma roda encontrada no padrão (FR/FL/RR/RL -> Wheel)")
+	local wheelData = getCarWheelData(car)
+	if #wheelData == 0 then
+		warn("❌ Nenhuma roda encontrada na estrutura FR/FL/RR/RL!")
 		return
 	end
 
@@ -606,43 +612,75 @@ local function applyTireTexture()
 		return
 	end
 
-	for _, wheelPart in ipairs(wheels) do
-		-- Limpa instâncias antigas de textura/decal criadas anteriormente
-		for _, child in ipairs(wheelPart:GetChildren()) do
-			if (child:IsA("Decal") or child:IsA("Texture")) and child.Name == "TireTexture" then
-				child:Destroy()
-			end
+	local appliedCount = 0
+
+	for _, data in ipairs(wheelData) do
+		local wheel = data.Wheel
+		local tireMesh = data.TireMesh
+
+		-- 1. Se 'Wheel' for uma MeshPart, altera diretamente o TextureID
+		if wheel:IsA("MeshPart") then
+			wheel.TextureID = assetId
+			appliedCount = appliedCount + 1
 		end
 
-		-- Cria Decal na face Left
-		local decal = Instance.new("Decal")
-		decal.Name = "TireTexture"
-		decal.Texture = assetId
-		decal.Face = Enum.NormalId.Left
-		decal.Parent = wheelPart
+		-- 2. Se houver objeto de Mesh (SpecialMesh/FileMesh) chamado 'Tire', altera o TextureId dele
+		if tireMesh and (tireMesh:IsA("SpecialMesh") or tireMesh:IsA("FileMesh")) then
+			tireMesh.TextureId = assetId
+			appliedCount = appliedCount + 1
+		end
 
-		-- Cria também uma Texture como fallback para suportar meshes UV
-		local tex = Instance.new("Texture")
-		tex.Name = "TireTexture"
-		tex.Texture = assetId
-		tex.Face = Enum.NormalId.Left
-		tex.StudsPerTileU = wheelPart.Size.Y
-		tex.StudsPerTileV = wheelPart.Size.Z
-		tex.Parent = wheelPart
+		-- 3. Limpa decals/texturas antigas criadas pelo script
+		if wheel:IsA("BasePart") then
+			for _, child in ipairs(wheel:GetChildren()) do
+				if (child:IsA("Decal") or child:IsA("Texture")) and child.Name == "TireTexture" then
+					child:Destroy()
+				end
+			end
+
+			-- Cria Decal na face Left como Fallback
+			local decal = Instance.new("Decal")
+			decal.Name = "TireTexture"
+			decal.Texture = assetId
+			decal.Face = Enum.NormalId.Left
+			decal.Parent = wheel
+
+			-- Cria Texture na face Left
+			local tex = Instance.new("Texture")
+			tex.Name = "TireTexture"
+			tex.Texture = assetId
+			tex.Face = Enum.NormalId.Left
+			tex.StudsPerTileU = wheel.Size.Y
+			tex.StudsPerTileV = wheel.Size.Z
+			tex.Parent = wheel
+		end
 	end
 
 	TireIdBox.Text = ""
-	print("✅ Textura de pneu aplicada na face LEFT de " .. #wheels .. " rodas com sucesso!")
+	print("✅ Textura de pneu aplicada com sucesso em " .. #wheelData .. " rodas!")
 end
 
 local function clearTireTextures()
 	local car = getCurrentCar()
 	if not car then return end
-	local wheels = getCarWheelParts(car)
-	for _, wheelPart in ipairs(wheels) do
-		for _, child in ipairs(wheelPart:GetChildren()) do
-			if (child:IsA("Decal") or child:IsA("Texture")) and child.Name == "TireTexture" then
-				child:Destroy()
+	local wheelData = getCarWheelData(car)
+	for _, data in ipairs(wheelData) do
+		local wheel = data.Wheel
+		local tireMesh = data.TireMesh
+
+		if wheel:IsA("MeshPart") then
+			wheel.TextureID = ""
+		end
+
+		if tireMesh and (tireMesh:IsA("SpecialMesh") or tireMesh:IsA("FileMesh")) then
+			tireMesh.TextureId = ""
+		end
+
+		if wheel:IsA("BasePart") then
+			for _, child in ipairs(wheel:GetChildren()) do
+				if (child:IsA("Decal") or child:IsA("Texture")) and child.Name == "TireTexture" then
+					child:Destroy()
+				end
 			end
 		end
 	end
@@ -926,4 +964,4 @@ UserInputService.InputBegan:Connect(function(input, gp)
 	end
 end)
 
-print("⚡ Livery & Tire Studio PRO v3.2 carregado com sucesso!")
+print("⚡ Livery & Tire Studio PRO v3.3 carregado com sucesso!")
