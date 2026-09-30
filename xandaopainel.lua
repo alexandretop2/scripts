@@ -1,10 +1,10 @@
 --[[
     ═══════════════════════════════════════════
     ⚡ PAINEL DO XANDÃO
-    Nitro • Pulo • Gravidade • Aderência • FOV • Fumaça • Configs
+    Nitro • Pulo • Gravidade • Aderência • FOV • Fumaça • Limitador • Configs
     ───────────────────────────────────────────
     Desenvolvedor: Xandão
-    Versão: 1.5 | Público
+    Versão: 1.6 | Público
     ═══════════════════════════════════════════
 ]]
 local UserInputService = game:GetService("UserInputService")
@@ -58,12 +58,18 @@ local smokeRotSpeed = 0
 local smokeColor1Hex = "#FFFFFF"
 local smokeColor2Hex = "#AAAAAA"
 
+-- Variáveis de Limitador de Velocidade
+local speedLimiterEnabled = false
+local maxSpeedKmh = 100 -- Valor padrão em KM/H
+local STUDS_TO_KMH = 1.09728
+local limiterConn = nil
+
 local ORIGINAL_GRAVITY = workspace.Gravity
 local currentGravity = workspace.Gravity
 local gravityLockConn = nil
 
 local currentFriction = 1.0
-local adhesionEnabled = false -- Começa desativado conforme solicitado
+local adhesionEnabled = false
 local adhesionConn = nil
 local originalWheelPhys = {}
 
@@ -341,6 +347,39 @@ local function applyJump()
     return true
 end
 
+-- LÓGICA DO LIMITADOR DE VELOCIDADE
+local function getCurrentSpeedKmh()
+    local root = getVehicleRoot()
+    if not root then return 0 end
+    local studsPerSec = root.AssemblyLinearVelocity.Magnitude
+    return math.floor(studsPerSec * STUDS_TO_KMH)
+end
+
+local function startSpeedLimiter()
+    if limiterConn then return end
+    limiterConn = RunService.Heartbeat:Connect(function()
+        if not speedLimiterEnabled then return end
+        local root = getVehicleRoot()
+        if not root then return end
+        
+        local currentVel = root.AssemblyLinearVelocity
+        local currentStudsPerSec = currentVel.Magnitude
+        local currentKmh = currentStudsPerSec * STUDS_TO_KMH
+        
+        if currentKmh > maxSpeedKmh and maxSpeedKmh > 0 then
+            local maxStudsPerSec = maxSpeedKmh / STUDS_TO_KMH
+            root.AssemblyLinearVelocity = currentVel.Unit * maxStudsPerSec
+        end
+    end)
+end
+
+local function stopSpeedLimiter()
+    if limiterConn then
+        limiterConn:Disconnect()
+        limiterConn = nil
+    end
+end
+
 local function startGravityLock()
     if gravityLockConn then return end
     gravityLockConn = RunService.Heartbeat:Connect(function()
@@ -517,6 +556,9 @@ local function getCurrentSettings()
         smokeRotSpeed = smokeRotSpeed,
         smokeColor1 = smokeColor1Hex,
         smokeColor2 = smokeColor2Hex,
+        -- Limiter Configs
+        speedLimiterEnabled = speedLimiterEnabled,
+        maxSpeedKmh = maxSpeedKmh,
     }
 end
 
@@ -549,6 +591,10 @@ local function applySettings(data)
     smokeColor1Hex = data.smokeColor1 or smokeColor1Hex
     smokeColor2Hex = data.smokeColor2 or smokeColor2Hex
 
+    -- Limitador
+    speedLimiterEnabled = data.speedLimiterEnabled == true
+    maxSpeedKmh = tonumber(data.maxSpeedKmh) or maxSpeedKmh
+
     pcall(function()
         if data.nitroKey and Enum.KeyCode[data.nitroKey] then nitroKey = Enum.KeyCode[data.nitroKey] end
         if data.jumpKey and Enum.KeyCode[data.jumpKey] then jumpKey = Enum.KeyCode[data.jumpKey] end
@@ -557,6 +603,12 @@ local function applySettings(data)
     applyNitroColors()
     applySmokeSettings()
     
+    if speedLimiterEnabled then
+        startSpeedLimiter()
+    else
+        stopSpeedLimiter()
+    end
+
     if adhesionEnabled then
         applyFrictionToWheels(currentFriction)
         startAdhesionLock()
@@ -674,6 +726,50 @@ NitroTab:CreateButton({
 nitroKeyBtn = NitroTab:CreateButton({
    Name = "⌨️ Tecla Nitro: [" .. nitroKey.Name .. "]",
    Callback = function() isBindingKey = true bindingType = "nitro" end,
+})
+
+-- ABA LIMITADOR DE VELOCIDADE
+local LimiterTab = Window:CreateTab("🛑 Limitador", 4483362458)
+LimiterTab:CreateSection("Ativação")
+ui.limiterToggle = LimiterTab:CreateToggle({
+   Name = "Ativar Limitador de Velocidade", CurrentValue = false, Flag = "LimiterEnabled",
+   Callback = function(Value)
+      speedLimiterEnabled = Value
+      if Value then
+         startSpeedLimiter()
+      else
+         stopSpeedLimiter()
+      end
+   end,
+})
+
+LimiterTab:CreateSection("Configurar Limite (KM/H)")
+LimiterTab:CreateParagraph({
+   Title = "📏 Conversão Automática",
+   Content = "1 Stud/s ≈ 1.097 KM/H. O script converte a velocidade do Roblox para KM/H em tempo real."
+})
+
+ui.limiterInput = LimiterTab:CreateInput({
+   Name = "Limite Personalizado (KM/H)", CurrentValue = tostring(maxSpeedKmh), PlaceholderText = "Ex: 100",
+   RemoveTextAfterFocusLost = false, Flag = "LimiterValue",
+   Callback = function(Text)
+      local val = tonumber(Text)
+      if val then
+         maxSpeedKmh = math.max(val, 0)
+      end
+   end,
+})
+
+LimiterTab:CreateButton({
+   Name = "🎯 Limitar na Velocidade Atual",
+   Callback = function()
+      local cur = getCurrentSpeedKmh()
+      maxSpeedKmh = cur
+      if ui.limiterInput then
+         pcall(function() ui.limiterInput:Set(tostring(cur)) end)
+      end
+      print("Limite de velocidade definido para " .. tostring(cur) .. " KM/H.")
+   end,
 })
 
 -- ABA FUMAÇA
@@ -952,7 +1048,6 @@ SettingsTab:CreateButton({
          menuBtnExists = false
       else
          createFloatingButton("FloatingMenu", "⚙️", Color3.fromRGB(50, 50, 50), function()
-            -- Simula o acionamento da tecla do menu (Toggle)
             if Rayfield and Rayfield.ToggleUI then
                 Rayfield:ToggleUI()
             end
@@ -994,7 +1089,7 @@ local CreditsTab = Window:CreateTab("👑 Créditos", 4483362458)
 CreditsTab:CreateSection("Desenvolvedor")
 CreditsTab:CreateParagraph({
    Title = "Painel do Xandão",
-   Content = "Desenvolvido por Xandão\n\nVersão 1.5 — Uso público\nObrigado por utilizar!",
+   Content = "Desenvolvido por Xandão\n\nVersão 1.6 — Uso público\nObrigado por utilizar!",
 })
 
 -- ─────────────────────────────────────────────
